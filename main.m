@@ -23,7 +23,7 @@ elseif ds == 1
 elseif ds == 2
     % Path containing images, depths and all...
     assert(exist('parking_path', 'var') ~= 0);
-    last_frame = 598;
+    last_frame = 5980;
     K = load([parking_path '/K.txt']);
      
     ground_truth = load([parking_path '/poses.txt']);
