@@ -73,6 +73,5 @@ for i = range
     end
     % Makes sure that plots refresh.    
     pause(0.01);
-    
     prev_img = image;
 end
