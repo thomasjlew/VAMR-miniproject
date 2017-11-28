@@ -1,4 +1,4 @@
-function [P,X] = initializeLandmarks(kf1,kf2,K)
+function [P,X] = initializeLandmarksHarris(kf1,kf2,K)
 % Initializes a first set of landmarks from two manually selected keyframes
 % step1: extract keypoint-descriptors from first and second keyframe
 % step2: match keypoints across frames

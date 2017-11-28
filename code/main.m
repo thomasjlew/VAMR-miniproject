@@ -64,7 +64,7 @@ else
 end
 
 % initialize first set of landmarks using two-view SfM
-[P_initial,X_initial] = initializeLandmarks(img0,img1,K);
+[P_initial,X_initial] = initializeLandmarksHarris(img0,img1,K);
 
 % initalize Markox state variables to start continouos operation
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
