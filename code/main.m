@@ -44,15 +44,9 @@ end
 %% Parameters:
 
 % Parameters for the 2D-2D correspondence on Ex.3
-param_2D2D_corr = struct(...
-    'descriptor_radius', 9,...    
-    'match_lambda', 4,... 
-    'harris_patch_size', 9,...                                                                        
-    'harris_kappa', 0.08,... % Typical values between 0.04 - 0.15                
-    'num_keypoints', 1000,...                                                                       
-    'nonmaximum_suppression_radius', 2, ...
-    'filtersize', 3,... %we use the minimal accepted value from the function detectHarrisfeatures
-    'minquality', 1e-5); 
+params_initialization = struct(...
+    'MinQuality', 0.01 ...
+    );
 
 %% Bootstrap
 % load two manually selected keyframes from dataset
@@ -78,7 +72,7 @@ else
 end
 
 % initialize first set of landmarks using two-view SfM
-[P_initial,X_initial] = initializeLandmarksHarris(img0,img1,K);
+[P_initial,X_initial] = initializeLandmarksHarris(img0,img1,K,params_initialization);
 
 % initalize Markox state variables to start continouos operation
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
