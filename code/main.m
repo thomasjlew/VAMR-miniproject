@@ -44,14 +44,24 @@ end
 %% Parameters:
 
 % Parameters for the 2D-2D correspondence on Ex.3
-params_initialization = struct(...
-    'MinQuality', 1e-5, ...
+params_initialization = struct (...
+    'MinQuality', 1e-5, ...             % Harris detection parameters
     'FilterSize', 3, ...
     'MaxRatio', 0.8, ...
-    'BlockSize', 11, ...
+    'BlockSize', 11, ...                % Feature extraction parameters
     'Unique', true,...
-    'NumTrials', 2000, ...
-    'DistanceThreshold', 0.2...
+    'NumTrials', 4000, ...              % Feature matching parameters
+    'DistanceThreshold', 0.2 ...
+    );
+
+params_continouos = struct (...
+    'BlockSize',[21 21], ...            % KLT parameters
+    'MaxIterations',30, ...         
+    'NumPyramidLevels',3, ...
+    'MaxBidirectionalError',inf, ...    % P3P and RANSAC parameters 
+    'MaxNumTrials',2000, ...
+    'Confidence',50, ...
+    'MaxReprojectionError', 5 ...
     );
 
 %% Bootstrap
@@ -86,7 +96,17 @@ prev_img = img1;
 
 
 %% Continuous operation
-range = (bootstrap_frames(2)+1):last_frame;
+% only iterate over 9 images for testing purposes
+range = (bootstrap_frames(2)+1):bootstrap_frames(2)+9;
+% range = (bootstrap_frames(2)+1):last_frame;
+f_KLT = figure('Name','Keypoint matches - KLT');
+f_cameraPose = figure('Name','3D camera trajectory');
+%scatter3(X_initial(1, :), X_initial(2, :), X_initial(3, :), 5);
+%view(0,0);
+%axis equal;
+%axis vis3d;
+%axis([-2 2 -2 2 -2 2]);
+
 for i = range
     fprintf('\n\nProcessing frame %d\n=====================\n', i);
     % Load next image from dataset
@@ -104,13 +124,17 @@ for i = range
     end
     
     % Process next frame
-    [state,pose] = processFrame(prev_state,prev_img,image);
+    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K);
+    figure(f_KLT); showMatchedFeatures(prev_img,image,prev_state.P,state.P);
     
     % Plot camera pose and landmarks
-    figure(1);
-    subplot(1,3,3);
-    
+    %figure(f_cameraPose);
+    %subplot(1,3,3);
     %TODO
+    %R = pose(:,1:3);
+    %t = pose(:,4);
+    %plotCoordinateFrame(R', t, 0.7);
+    %view(0,0);
     
     % Makes sure that plots refresh.    
     pause(0.01);
