@@ -29,11 +29,12 @@ figure('Name','Keypoints Frame 1'); imshow(kf1); hold on; plot(P1); hold off;
 figure('Name','Keypoints Frame 2'); imshow(kf2); hold on; plot(P2); hold off;
 
 %% step2: match keypoints across frames
-indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',true,'MaxRatio',0.8);
+indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',false,'MaxRatio',0.8);
 % select only the matched keypoints
 P1_matched = P1_valid(indexPairs(:,1),:);
-P2_matched = P2_valid(indexPairs(:,1),:);
+P2_matched = P2_valid(indexPairs(:,2),:);
 fprintf('\n matched %d keypoints across keyframes \n', length(P1_matched));
+figure('Name','Keypoint matches before RANSAC'); showMatchedFeatures(kf1,kf1,P1_matched,P2_matched);
 
 %% step3: apply RANSAC filter to reject outliers and estimate Fundamental
 [F,inliersIndex] = estimateFundamentalMatrix(P1_matched,P2_matched,...

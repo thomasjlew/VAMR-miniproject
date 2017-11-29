@@ -35,7 +35,7 @@ elseif ds == 2
     ground_truth = ground_truth(:, [end-8 end]);
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[1, 4];
+    bootstrap_frames=[1, 5];
 else
     assert(false);
 end
