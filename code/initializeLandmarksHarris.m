@@ -61,3 +61,4 @@ P = P2_inliers;
 fprintf('... Accomplished initialization \n');
 end
 
+
