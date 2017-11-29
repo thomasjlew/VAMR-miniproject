@@ -40,6 +40,20 @@ else
     assert(false);
 end
 
+
+%% Parameters:
+
+% Parameters for the 2D-2D correspondence on Ex.3
+param_2D2D_corr = struct(...
+    'descriptor_radius', 9,...    
+    'match_lambda', 4,... 
+    'harris_patch_size', 9,...                                                                        
+    'harris_kappa', 0.08,... % Typical values between 0.04 - 0.15                
+    'num_keypoints', 1000,...                                                                       
+    'nonmaximum_suppression_radius', 2, ...
+    'filtersize', 3,... %we use the minimal accepted value from the function detectHarrisfeatures
+    'minquality', 1e-5); 
+
 %% Bootstrap
 % load two manually selected keyframes from dataset
 if ds == 0
