@@ -92,6 +92,9 @@ for i = range
     [state,pose] = processFrame(prev_state,prev_img,image);
     
     % Plot camera pose and landmarks
+    figure(1);
+    subplot(1,3,3);
+    
     %TODO
     
     % Makes sure that plots refresh.    
