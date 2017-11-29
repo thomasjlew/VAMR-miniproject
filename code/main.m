@@ -54,16 +54,6 @@ params_initialization = struct(...
     'DistanceThreshold', 0.2...
     );
 
-params_continouos = struct(...
-    'MinQuality', 1e-5, ...
-    'FilterSize', 3, ...
-    'MaxRatio', 0.8, ...
-    'BlockSize', 11, ...
-    'Unique', true,...
-    'NumTrials', 2000, ...
-    'DistanceThreshold', 0.2...
-    );
-
 %% Bootstrap
 % load two manually selected keyframes from dataset
 if ds == 0
@@ -94,6 +84,7 @@ end
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
 prev_img = img1;
 
+
 %% Continuous operation
 range = (bootstrap_frames(2)+1):last_frame;
 for i = range
@@ -113,8 +104,7 @@ for i = range
     end
     
     % Process next frame
-    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K);
-    fprintf('Processed frame %d \n',i);
+    [state,pose] = processFrame(prev_state,prev_img,image);
     
     % Plot camera pose and landmarks
     figure(1);
