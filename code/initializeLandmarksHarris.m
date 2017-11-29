@@ -1,4 +1,4 @@
-function [P,X] = initializeLandmarksHarris(kf1,kf2,K)
+function [P,X] = initializeLandmarksHarris(kf1,kf2,K,params)
 % Initializes a first set of landmarks from two manually selected keyframes
 % step1: extract keypoint-descriptors from first and second keyframe
 % step2: match keypoints across frames
@@ -8,7 +8,10 @@ function [P,X] = initializeLandmarksHarris(kf1,kf2,K)
 % kf1: [HxW] intensity img first keyframe
 % kf2: [HxW] intensity img second keyframe
 % K: [3x3] camera matrix
-%
+% params: struct [1x?] set of parameters for initialization algroithm
+%       params.MinQuality
+%       params.FilterSize
+%       
 % P: [2xN] set of 2D keypoints from second keyframe
 % X: [3xN] set of 3D landmarks where the i-th landmark corresponds
 % to the i-th keypoint in kf2

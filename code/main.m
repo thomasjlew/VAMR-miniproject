@@ -40,6 +40,14 @@ else
     assert(false);
 end
 
+
+%% Parameters:
+
+% Parameters for the 2D-2D correspondence on Ex.3
+params_initialization = struct(...
+    'MinQuality', 0.01 ...
+    );
+
 %% Bootstrap
 % load two manually selected keyframes from dataset
 if ds == 0
@@ -64,7 +72,7 @@ else
 end
 
 % initialize first set of landmarks using two-view SfM
-[P_initial,X_initial] = initializeLandmarksHarris(img0,img1,K);
+[P_initial,X_initial] = initializeLandmarksHarris(img0,img1,K,params_initialization);
 
 % initalize Markox state variables to start continouos operation
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
