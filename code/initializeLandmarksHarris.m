@@ -47,7 +47,7 @@ figure('Name','Keypoint matches after RANSAC'); showMatchedFeatures(kf1,kf1,P1_i
 
 % construct cameraIntrinsics object that can be passed to function
 % relativeCameraPose()
-intrinsics = cameraIntrinsics([K(1,1); K(2,2)],[K(1,3);K(2,3)],size(kf1));
+intrinsics = cameraParameters('IntrinsicMatrix',K);
 % calculate relative rot. and translation from camera poses in kf1 to kf2
 [R,t] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
 
@@ -59,6 +59,7 @@ X = triangulate(P1_inliers,P2_inliers,M1,M2);
 P = P2_inliers;
 
 fprintf('... Accomplished initialization \n');
+
 end
 
 
