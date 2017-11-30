@@ -9,14 +9,17 @@ ds = 2; % 0: KITTI, 1: Malaga, 2: parking
 if ds == 0
     % need to set kitti_path to folder containing "00" and "poses"
     kitti_path = '../data/kitti';
-    assert(exist('kitti_path', 'dir') ~= 0);
+    assert(exist(kitti_path, 'dir') ~= 0);
     ground_truth = load([kitti_path '/poses/00.txt']);
     ground_truth = ground_truth(:, [end-8 end]);
     last_frame = 4540;
     K = [7.188560000000e+02 0 6.071928000000e+02
         0 7.188560000000e+02 1.852157000000e+02
         0 0 1];
+    
+    % specify frame count for initialization keyframes
     bootstrap_frames=[1, 3];
+    
     % parameters
     params_initialization = struct (...
     'MinQuality', 1e-5, ...             % Harris detection parameters
@@ -42,7 +45,7 @@ if ds == 0
 elseif ds == 1
     % Path containing the many files of Malaga 7.
     malaga_path = '../data/malaga';
-    assert(exist('malaga_path', 'dir') ~= 0);
+    assert(exist(malaga_path, 'dir') ~= 0);
     images = dir([malaga_path ...
         '/malaga-urban-dataset-extract-07_rectified_800x600_Images']);
     left_images = images(3:2:end);
@@ -50,11 +53,15 @@ elseif ds == 1
     K = [621.18428 0 404.0076
         0 621.18428 309.05989
         0 0 1];
-    % parameters
+    
+    % specify frame count for initialization keyframes
+    bootstrap_frames=[1, 3];
+    
+    % malaga parameters
     params_initialization = struct (...
-    'MinQuality', 1e-5, ...             % Harris detection parameters
+    'MinQuality', 2e-5, ...             % Harris detection parameters
     'FilterSize', 3, ...
-    'MaxRatio', 0.8, ...
+    'MaxRatio', 0.7, ...
     'BlockSize', 11, ...                % Feature extraction parameters
     'Unique', true,...
     'NumTrials', 4000, ...              % Feature matching parameters
@@ -66,9 +73,9 @@ elseif ds == 1
     'MaxIterations',30, ...         
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',inf, ...    % P3P and RANSAC parameters 
-    'MaxNumTrials',4000, ...
+    'MaxNumTrials',2000, ...
     'Confidence',50, ...
-    'MaxReprojectionError', 6 ...
+    'MaxReprojectionError', 4 ...
     );
 
 %% Establish parking dataset
@@ -85,23 +92,27 @@ elseif ds == 2
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 5];
     
-    % parameters
+    % parking parameters
     params_initialization = struct (...
     'MinQuality', 1e-5, ...             % Harris detection parameters
     'FilterSize', 3, ...
     'MaxRatio', 0.8, ...
-    'BlockSize', 11, ...                % Feature extraction parameters
+    'BlockSizeHarris', 11, ...                % Feature extraction parameters
     'Unique', true,...
-    'NumTrials', 4000, ...              % Feature matching parameters
-    'DistanceThreshold', 0.2 ...
+    'NumTrials', 3000, ...              % Feature matching parameters
+    'DistanceThreshold', 0.2, ...
+    'BlockSizeKLT',[21 21], ...            % KLT parameters
+    'MaxIterations',30, ...         
+    'NumPyramidLevels',3, ...
+    'MaxBidirectionalError',inf ...  
     );
 
     params_continouos = struct (...
     'BlockSize',[21 21], ...            % KLT parameters
     'MaxIterations',30, ...         
     'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',inf, ...    % P3P and RANSAC parameters 
-    'MaxNumTrials',4000, ...
+    'MaxBidirectionalError',inf, ...    
+    'MaxNumTrials',3000, ...            % P3P and RANSAC parameters 
     'Confidence',50, ...
     'MaxReprojectionError', 6 ...
     );
@@ -139,21 +150,24 @@ end
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
 prev_img = img1;
 
+% initialize figure to show matches and to plot pose
+f_cameraPose = figure('Name','3D camera trajectory');
+xlabel('x-axis');ylabel('y-axis');zlabel('z-axis');
+figure_KLT = figure('Name','Keypoint matches - KLT');
+
+% plot initial set of landpoints and origin
+figure(f_cameraPose);
+scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 5);
+%plotCoordinateFrame(eye(3), [0; 0; 0], 0.1);
 
 %% Continuous operation
 % only iterate over 9 images for testing purposes
 range = (bootstrap_frames(2)+1):bootstrap_frames(2)+9;
 % range = (bootstrap_frames(2)+1):last_frame;
-f_KLT = figure('Name','Keypoint matches - KLT');
-f_cameraPose = figure('Name','3D camera trajectory');
-%scatter3(X_initial(1, :), X_initial(2, :), X_initial(3, :), 5);
-%view(0,0);
-%axis equal;
-%axis vis3d;
-%axis([-2 2 -2 2 -2 2]);
+
 
 for i = range
-    fprintf('\n\nProcessing frame %d\n=====================\n', i);
+    fprintf('\n\nProcessing frame %d\n=====================', i);
     % Load next image from dataset
     if ds == 0
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
@@ -169,8 +183,7 @@ for i = range
     end
     
     % Process next frame
-    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K);
-    figure(f_KLT); showMatchedFeatures(prev_img,image,prev_state.P,state.P);
+    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,figure_KLT);
     
     % Plot camera pose and landmarks
     %figure(f_cameraPose);

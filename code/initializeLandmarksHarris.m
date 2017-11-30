@@ -19,26 +19,36 @@ function [P,X] = initializeLandmarksHarris(kf1,kf2,K,params)
 fprintf('Starting initialization ... \n');
 
 %% step1: extract keypoint-descriptors from first and second keyframe
+% Keypoint detection
 P1 = detectHarrisFeatures(kf1,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 P2 = detectHarrisFeatures(kf2,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 fprintf('\n detected %d keypoints in keyframe 1', length(P1));
 fprintf('\n detected %d keypoints in keyframe 2 \n', length(P2));
-[descriptors1,P1_valid] = extractFeatures(kf1,P1,'BlockSize',params.BlockSize);
-[descriptors2,P2_valid] = extractFeatures(kf2,P2,'BlockSize',params.BlockSize);
+% Harris feature extraction
+%[descriptors1,P1_valid] = extractFeatures(kf1,P1,'BlockSize',params.BlockSizeHarris);
+%[descriptors2,P2_valid] = extractFeatures(kf2,P2,'BlockSize',params.BlockSizeHarris);
 
 %% step2: match keypoints across frames
-indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',params.Unique,'MaxRatio',params.MaxRatio);
+% KLT tracking
+tracker = vision.PointTracker('BlockSize',params.BlockSizeKLT,'MaxIterations',params.MaxIterations, ...
+    'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
+initialize(tracker,P1.Location,kf1);
+[P2, validIdx] = step(tracker, kf2);
+P1_matched = P1.Location(validIdx, :);
+P2_matched = P2(validIdx, :);
+% Harris matching
+%indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',params.Unique,'MaxRatio',params.MaxRatio);
 % select only the matched keypoints
-P1_matched = P1_valid(indexPairs(:,1),:);
-P2_matched = P2_valid(indexPairs(:,2),:);
+%P1_matched = P1_valid(indexPairs(:,1),:);
+%P2_matched = P2_valid(indexPairs(:,2),:);
 fprintf('\n matched %d keypoints across keyframes \n', length(P1_matched));
 
 %% step3: apply RANSAC filter to reject outliers and estimate Fundamental
 [F,inliersIndex] = estimateFundamentalMatrix(P1_matched,P2_matched,...
     'Method','RANSAC','NumTrials',params.NumTrials,'DistanceThreshold',params.DistanceThreshold);
 % select only matched keypoints that were not rejected by RANSAC
-P1_inliers = P1_matched(inliersIndex);
-P2_inliers = P2_matched(inliersIndex);
+P1_inliers = P1_matched(inliersIndex,:);
+P2_inliers = P2_matched(inliersIndex,:);
 fprintf('\n after RANSAC %d remaining matches \n', length(P1_inliers));
 figure('Name','Keypoint matches after RANSAC'); showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
 
@@ -46,14 +56,15 @@ figure('Name','Keypoint matches after RANSAC'); showMatchedFeatures(kf1,kf2,P1_i
 % relativeCameraPose()
 intrinsics = cameraParameters('IntrinsicMatrix',K);
 % calculate relative rot. and translation from camera poses in kf1 to kf2
-[R,t] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
+[orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
+[R, t] = cameraPoseToExtrinsics(orient, location);
 
 %% step4: triangulate landmarks
-M1 = cameraMatrix(intrinsics,eye(3),zeros(3,1));
+M1 = cameraMatrix(intrinsics,eye(3),[0 0 0]);
 M2 = cameraMatrix(intrinsics,R,t);
 
 X = triangulate(P1_inliers,P2_inliers,M1,M2);
-P = P2_inliers.Location;
+P = P2_inliers;
 
 fprintf('... Accomplished initialization \n');
 
