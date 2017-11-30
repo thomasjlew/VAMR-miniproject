@@ -1,4 +1,4 @@
-function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K)
+function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,figure_KLT)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
@@ -36,6 +36,7 @@ initialize(pointTracker,prev_state.P,prev_img);
 [P,indexes_tracked] = step(pointTracker,current_img);
 state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
+figure(figure_KLT); showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
 
 %% step2: estimate the updated camera pose from 2D-3D correspondences
 intrinsics = cameraParameters('IntrinsicMatrix',K);
