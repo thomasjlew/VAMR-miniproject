@@ -130,7 +130,8 @@ elseif ds == 2
     'MaxBidirectionalError',1,...%inf, ... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     'MaxNumTrials',3000, ...            % P3P and RANSAC parameters 
     'Confidence',70,...%50, ...
-    'MaxReprojectionError', 6 ...
+    'MaxReprojectionError', 6, ...
+    'AlphaThreshold', 5 *pi/180 ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     );
 else
     assert(false);
@@ -225,6 +226,9 @@ for i = range
     mArrow3(p1,p2, 'stemWidth', 0.05);
 %     scatter3(last_t(1),last_t(2),last_t(3),'b+');
 %     legend('3d pts', '1st cam', '2nd cam');
+
+    % Plot newly triangulated keypoints as well (SOME BUGS FOR NOW !)
+    scatter3(state.X(:, 1), state.X(:, 2), state.X(:, 3), 5); hold on; grid on;
 
     % Plot camera pose and landmarks
     %figure(f_cameraPose);
