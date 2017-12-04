@@ -1,4 +1,4 @@
-function [P,X] = initializeLandmarksHarris(kf1,kf2,K,params)
+function [P,X,R,t] = initializeLandmarksHarris(kf1,kf2,K,params)
 % Initializes a first set of landmarks from two manually selected keyframes
 % step1: extract keypoint-descriptors from first and second keyframe
 % step2: match keypoints across frames
@@ -12,8 +12,10 @@ function [P,X] = initializeLandmarksHarris(kf1,kf2,K,params)
 %       params.MinQuality
 %       params.FilterSize
 %       
-% P: [2xN] set of 2D keypoints from second keyframe
+% P: [2xN] set of 2D keypoints FROM SECOND KEYFRAME
 % X: [3xN] set of 3D landmarks where the i-th landmark corresponds
+% R: [3x3] rotation matrix corresp. to 2nd camera
+% t: [1x3] translation vector' corresp. to 2nd camera
 % to the i-th keypoint in kf2
 
 fprintf('Starting initialization ... \n');
@@ -49,24 +51,40 @@ fprintf('\n matched %d keypoints across keyframes \n', length(P1_matched));
 % select only matched keypoints that were not rejected by RANSAC
 P1_inliers = P1_matched(inliersIndex,:);
 P2_inliers = P2_matched(inliersIndex,:);
-fprintf('\n after RANSAC %d remaining matches \n', length(P1_inliers));
-figure('Name','Keypoint matches after RANSAC'); showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
+fprintf('\n after RANSAC: %d remaining matches \n', length(P1_inliers));
+% Plot matches
+figure('Name','Keypoint matches after RANSAC'); 
+showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
 
 % construct cameraIntrinsics object that can be passed to function
 % relativeCameraPose()
-intrinsics = cameraParameters('IntrinsicMatrix',K);
+intrinsics = cameraParameters('IntrinsicMatrix',K'); %%CAREFUL: TRANSPOSE!
 % calculate relative rot. and translation from camera poses in kf1 to kf2
 [orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
 [R, t] = cameraPoseToExtrinsics(orient, location);
 
 %% step4: triangulate landmarks
-M1 = cameraMatrix(intrinsics,eye(3),[0 0 0]);
+M1 = cameraMatrix(intrinsics,eye(3),[0 0 0]); %K*[R;t]  => 4x3
 M2 = cameraMatrix(intrinsics,R,t);
 
 X = triangulate(P1_inliers,P2_inliers,M1,M2);
 P = P2_inliers;
 
+% DEBUG
+% f_cameraPose = figure('Name','3D camera trajectory');
+% xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
+% hold on; grid on;
+% % figure(f_cameraPose);
+% scatter3(X(:, 1), X(:, 2), X(:, 3), 5); hold on; grid on;
+% % DEBUG
+
 fprintf('... Accomplished initialization \n');
+
+
+%% Additionnal functions to automaticly arrange figures
+disp('------------------------------------------------------------------');
+disp('Arrange figures to display nicely onto monitor');
+% autoArrangeFigures(0,0,1);
 
 end
 
