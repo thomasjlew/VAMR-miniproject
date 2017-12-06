@@ -5,7 +5,7 @@ close all;
 
 % ds = 0; % 0: KITTI, 1: Malaga, 2: parking
 % ds = 1; % 0: KITTI, 1: Malaga, 2: parking
-ds = 2; % 0: KITTI, 1: Malaga, 2: parking
+ds = 1; % 0: KITTI, 1: Malaga, 2: parking
 
 %% Establish kitti dataset
 if ds == 0
@@ -121,7 +121,7 @@ elseif ds == 1
     'MatchThreshold', 100.0,...  % lower  => less  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 40 ...
+    'MinDistance', 20 ...
     );
 
 %% Establish parking dataset
@@ -231,7 +231,7 @@ f_cameraPose = figure('Name','Feature Extraction');
 f_cameraTrajectory = figure('Name','3D camera trajectory');
     % set window position and size [left bottom width height]
     set(gcf, 'Position', [0, 300, 800, 500])
-    xlim([-10,50]); ylim([-10,20]); zlim([-10,50]);
+    xlim([-20,30]); ylim([-10,20]); zlim([-20,50]);
     % set viewpoint
     view(0, 0);
     set(gca, 'CameraUpVector', [0, 0, 1]);
@@ -239,10 +239,10 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     grid on
     hold on
     % plot
-    cameraSize = 2;
+    cameraSize = 1.5;
     comOrigin = plotCamera('Size', cameraSize, 'Location',...
         [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0);
-    camInitialization = plotCamera('Size', cameraSize, 'Location',...
+    cam = plotCamera('Size', cameraSize, 'Location',...
         t_initial, 'Orientation', R_initial,'Color', 'r', 'Opacity', 0);
     trajectory = plot3(0, 0, 0, 'b-');
     legend('Estimated Trajectory');
@@ -294,10 +294,12 @@ for i = range
         % plot the estimated trajectory.
         set(trajectory, 'XData', locations(:,1), 'YData', ...
         locations(:,2), 'ZData', locations(:,3));
+        cam.Location = cam_poses(:,4,end);
+        cam.Orientation = cam_poses(:,1:3,end);
         % plot landmarks
         newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
         if ~isempty(newKeypoints)
-            scatter3(newKeypoints(1), newKeypoints(2), newKeypoints(3), 5); hold on; grid on;
+            scatter3(newKeypoints(:,1), newKeypoints(:,2), newKeypoints(:,3), 5); hold on; grid on;
         end
 
     %% Update input varibles for next iteration

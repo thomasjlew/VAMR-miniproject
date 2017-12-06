@@ -26,9 +26,6 @@ P1 = detectHarrisFeatures(kf1,'MinQuality',params.MinQuality,'FilterSize',params
 P2 = detectHarrisFeatures(kf2,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 fprintf('\n detected %d keypoints in keyframe 1', length(P1));
 fprintf('\n detected %d keypoints in keyframe 2 \n', length(P2));
-% Harris feature extraction
-%[descriptors1,P1_valid] = extractFeatures(kf1,P1,'BlockSize',params.BlockSizeHarris);
-%[descriptors2,P2_valid] = extractFeatures(kf2,P2,'BlockSize',params.BlockSizeHarris);
 
 %% step2: match keypoints across frames
 % KLT tracking
@@ -38,11 +35,6 @@ initialize(tracker,P1.Location,kf1);
 [P2, validIdx] = step(tracker, kf2);
 P1_matched = P1.Location(validIdx, :);
 P2_matched = P2(validIdx, :);
-% Harris matching
-%indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',params.Unique,'MaxRatio',params.MaxRatio);
-% select only the matched keypoints
-%P1_matched = P1_valid(indexPairs(:,1),:);
-%P2_matched = P2_valid(indexPairs(:,2),:);
 fprintf('\n matched %d keypoints across keyframes \n', length(P1_matched));
 
 %% step3: apply RANSAC filter to reject outliers and estimate Fundamental
