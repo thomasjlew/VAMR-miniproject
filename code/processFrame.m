@@ -2,7 +2,7 @@ function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,fi
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
-% step2: estimate the updated camera pose from 2D-3D correspondences
+% steC: estimate the updated camera pose from 2D-3D correspondences
 % step3: acquire N new keypoint candidates and add them to state.C [2x(M+N)]
 % step4: for every of N candidates write the current camera pose to state.T [12x(M+N]
 % step5: evaluate track for every keypoint candidate state.F [2x(M+N)]
@@ -28,7 +28,7 @@ function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,fi
 state = struct ('P', zeros(2,1),'X',zeros(3,1),'C',[],'F',[],'T',[]);
 % state = struct ('P', zeros(2,1),'X',zeros(3,1),'C',zeros(1,2),'F',zeros(2,1),'T',zeros(12,1));
 
-%% step1: track keypoints from previous image and select the corresponding landmarks
+%% step1.1: track keypoints from previous image and select the corresponding landmarks
 % construct and initialize KLT point tracker
 pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',params.MaxIterations, ...
     'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
@@ -42,10 +42,10 @@ figure(figure_KLT);
 showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
 hold on;
 
-%% Step1.2 Track potential keypoints in state.C
+%% step1.2: Track potential keypoints in state.C
 %   This will remove lost (non tracked) keypoints.
 % construct and initialize KLT point tracker
-if prev_state.C~=[0,0] % Don't try to track non existent features (1st run)
+if ~isequal(prev_state.C,[0,0]) % Don't try to track non existent features (1st run)
     pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',params.MaxIterations, ...
         'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
     initialize(pointTracker,prev_state.C,prev_img);
@@ -57,11 +57,7 @@ if prev_state.C~=[0,0] % Don't try to track non existent features (1st run)
     state.T = prev_state.T(:,indexes_tracked);
 end
 
-% figure(figure_KLT); 
-% showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
-% hold on;
-
-%% step2: estimate the updated camera pose from 2D-3D correspondences
+%% steC: estimate the updated camera pose from 2D-3D correspondences
 intrinsics = cameraParameters('IntrinsicMatrix',K');
 [R,t] = estimateWorldCameraPose(state.P,state.X,intrinsics,...
     'MaxNumTrials',params.MaxNumTrials,'Confidence',params.Confidence,'MaxReprojectionError',params.MaxReprojectionError);
@@ -73,42 +69,41 @@ pose = [R,t'];
 % ! include new tracks (=> save them in state.F later)
 
 % Detect new keypoints with Harris
-P2 = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+C = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 
 % -------------------------------------------------------------
 % Remove pts which are matched against currently tracked keypts  --- - -- -- - @OPTIMIZATION: Add other checks, such as 2d distance with other pts big enough
 % -------------------------------------------------------------
 % Extract Harris descriptors                                  tracked3dpts;candidates 
-[descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]));  %% @OPTIMIZATION: save descriptors
-[descriptors_new, valid_corners] = extractFeatures(current_img, P2);                                  % and dont compute them each time
+[descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  %% @OPTIMIZATION: save descriptors
+[descriptors_new, valid_corners] = extractFeatures(current_img, C, 'BlockSize',params.BlockSizeHarris);                                  % and dont compute them each time
 % Match
 indexPairs = matchFeatures(descriptors_prev,descriptors_new,'Unique',params.Unique, ...
                                 'MaxRatio',params.MaxRatio, 'MatchThreshold', params.MatchThreshold);
 % REMOVE the matched points: we don't want to add same tracked keypoints
-not_matched_idx = not(ismember(P2.Location,P2(indexPairs(:,2)).Location)); %[Matched_nbx2]
-P2_NOT_matched = P2(not_matched_idx(:,1));
+not_matched_idx = not(ismember(C.Location,C(indexPairs(:,2)).Location)); %[Matched_nbx2]
+C_NOT_matched = C(not_matched_idx(:,1));
 
 % plot results (new extracted keypoints)
-scatter(P2_NOT_matched.Location(:,1),P2_NOT_matched.Location(:,2),'b+');
+% scatter(C_NOT_matched.Location(:,1),C_NOT_matched.Location(:,2),'b+');
 
 % Add new keypoints to potentially future triangulated features
-% state.C = [prev_state.C;P2_NOT_matched.Location];
-% state.F = [prev_state.F;P2_NOT_matched.Location]; % 1st observation of feature
-state.C = [state.C;P2_NOT_matched.Location];
-state.F = [state.F;P2_NOT_matched.Location]; % 1st observation of feature
-fprintf('\n New added keypoints: %d \n', length(P2_NOT_matched));
-disp(' ');
+% state.C = [prev_state.C;C_NOT_matched.Location];
+% state.F = [prev_state.F;C_NOT_matched.Location]; % 1st observation of feature
+state.C = [state.C;C_NOT_matched.Location];
+state.F = [state.F;C_NOT_matched.Location]; % 1st observation of feature
+fprintf('\n New added keypoints: %d \n', length(C_NOT_matched));
 % -------------------------------------------------------------
 
 
 %% step4: for every of N candidates write the current camera pose to state.T [12xM]
-% state.T = [prev_state.T, repmat(pose(:),1,size(P2_NOT_matched.Location,1))];
-state.T = [state.T, repmat(pose(:),1,size(P2_NOT_matched.Location,1))];
+% state.T = [prev_state.T, repmat(pose(:),1,size(C_NOT_matched.Location,1))];
+state.T = [state.T, repmat(pose(:),1,size(C_NOT_matched.Location,1))];
 
 %% step5: evaluate track for every keypoint candidate state.F [2x(M+N)]
 intrinsics = cameraParameters('IntrinsicMatrix',K');
 % We don't do RANSAC here since we already know [R,t]. Fix that maybe
-% [orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers); % <<<<<----@OPTIMIZATION: IMPROVE PRECISION HERE --------
+% [orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,C_inliers); % <<<<<----@OPTIMIZATION: IMPROVE PRECISION HERE --------
 % [R, t] = cameraPoseToExtrinsics(orient, location);
 
 % Indices of tracks to be kept since baseline too small
