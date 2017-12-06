@@ -55,6 +55,7 @@ fprintf('\n after RANSAC: %d remaining matches \n', length(P1_inliers));
 % Plot matches
 figure('Name','Keypoint matches after RANSAC'); 
 showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
+set(gcf, 'Position', [800, 300, 500, 500])
 
 % construct cameraIntrinsics object that can be passed to function
 % relativeCameraPose()

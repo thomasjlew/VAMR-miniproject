@@ -39,9 +39,8 @@ state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
 
 figure(resultDisplay);
-subplot(2,1,2);
+set(gcf, 'Position', [800, 300, 500, 500])
 showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
-hold on;
 
 %% step1.2: track potential keypoints in state.C
 % Remove lost (non tracked) keypoints.
@@ -70,7 +69,7 @@ pose = [R,t'];
 %   state.X and remove the candidate
 intrinsics = cameraParameters('IntrinsicMatrix',K');
 n_landmarks = length(state.X);
-indexesTriangulated = true(length(state.C),1);
+indexesTriangulated = false(length(state.C),1);
 
 % @OPTIMIZATION - remove for loop ------------------------------------
 % create index vector corresp. to matches with same state.C & state.F
@@ -101,13 +100,13 @@ for i=1:length(state.C)
     if abs(alpha) > params.AlphaThreshold
         state.X = [state.X; landmark_C];
         state.P = [state.P; state.C(i,:)];
-        indexesTriangulated(i)=false;
+        indexesTriangulated(i)=true;
     end
 end
 
-state.C = state.C(indexesTriangulated,:);
-state.F = state.F(indexesTriangulated,:);
-state.T = state.T(indexesTriangulated,:);
+state.C = state.C(~indexesTriangulated,:);
+state.F = state.F(~indexesTriangulated,:);
+state.T = state.T(~indexesTriangulated,:);
 
 fprintf('\n Added %d new 3D landmarks \n', length(state.X)-n_landmarks);
 
@@ -151,6 +150,7 @@ state.F = [state.F; C_new.Location]; % 1st observation of feature
 % form row vector from (3x4) pose matrix and write it N times to sate.T
 T_new = repmat(reshape(pose,[1,12]),length(C_new),1);
 state.T = [state.T; T_new];
-fprintf('%d new candidates, %d remaining after duplicate removal, %d total keypoints, %d total candidates, %d T \n',n_keypoints,length(C_new),length(state.P),length(state.C),length(state.T));
+fprintf('%d new candidates, %d remaining after duplicate removal, %d total keypoints, %d total candidates \n',...
+    n_keypoints,length(C_new),length(state.P),length(state.C));
 end
 

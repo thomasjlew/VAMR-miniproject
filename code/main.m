@@ -22,7 +22,8 @@ if ds == 0
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 3];
     
-    % parameters
+    % -------- Parameters KITTI ---------
+    % initialization parameters KITTI
     params_initialization = struct (...
     ...% Harris detection parameters
     'MinQuality', 25e-5, ...             
@@ -40,7 +41,7 @@ if ds == 0
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',inf ...  
     );
-
+    % processFrame parameters KITTI
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
@@ -80,7 +81,8 @@ elseif ds == 1
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 3];
     
-    % malaga parameters
+    % -------- Parameters MALAGA ---------
+    % initialization parameters Malaga
     params_initialization = struct (...
     ...% Harris detection parameters
     'MinQuality', 25e-5, ...             
@@ -98,7 +100,7 @@ elseif ds == 1
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',inf ...  
     );
-
+    % processFrame parameters Malaga
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
@@ -119,7 +121,7 @@ elseif ds == 1
     'MatchThreshold', 100.0,...  % lower  => less  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 10 ...
+    'MinDistance', 40 ...
     );
 
 %% Establish parking dataset
@@ -136,7 +138,8 @@ elseif ds == 2
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 5];
     
-    % parking parameters
+    % -------- Parameters PARKING ---------
+    % initialization parameters Parking 
     params_initialization = struct (...
     ...% Harris detection parameters
     'MinQuality', 2e-5, ...             
@@ -154,7 +157,7 @@ elseif ds == 2
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',inf ...  
     );
-
+    % processFrame parameters Parking 
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
@@ -181,7 +184,7 @@ else
     assert(false);
 end
 
-%% Bootstrap
+%% Bootstrap (Initialization)
 % load two manually selected keyframes from dataset
 if ds == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -208,35 +211,49 @@ end
 [P_initial,X_initial,R_initial,t_initial] = ...
         initializeLandmarksHarris(img0,img1,K,params_initialization);
 
+% initialize camera poses
+cam_poses(:,:,1) = [eye(3,3),[0;0;0]];
+cam_poses= cat(3,[R_initial,t_initial']);
+locations = t_initial;
+
 % initalize Markox state variables to start continouos operation
 % prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(2,1),'F',zeros(2,1),'T',zeros(12,1));
 prev_state = struct('P',P_initial,'X',X_initial,'C',zeros(1,2),'F',zeros(2,1),'T',zeros(12,1));
 prev_img = img1;
 
-% plot initial set of 3d landpoints and origin
-f_cameraPose = figure('Name','3D camera trajectory');
-subplot(2,2,1);
-xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
-xlim([-10,50]); ylim([-10,20]); zlim([-10,50]);
-hold on; grid on; 
-% figure(f_cameraPose);
-scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 5); hold on; grid on;
-plotCamera('Location', [0,0,0], 'Orientation', eye(3,3), 'Opacity', 0, 'Color', [1,0,0]); 
-scatter3(0,0,0,'r+');
-plotCamera('Location', t_initial, 'Orientation', R_initial, 'Opacity', 0, 'Color', [0,1,0]);
-%scatter(t_initial(1),t_initial(2),t_initial(3),'g+');
-%legend('3d initialization landmarks', '1st cam pose', '2nd cam pose');
 
-% Save camera poses
-cam_poses = zeros(3,4,2);
-cam_poses(:,:,1) = [eye(3,3),[0;0;0]];
-cam_poses(:,:,2) = [R_initial,t_initial'];
+%% Intialize plots
+% plot initial set of 3d landpoints and origin
+f_cameraPose = figure('Name','Feature Extraction');
+    set(gcf, 'Position', [800, 300, 500, 500],'InnerPosition',[0, 0, 500, 500]) 
+
+% plot inital camera pose and landmarks
+f_cameraTrajectory = figure('Name','3D camera trajectory');
+    % set window position and size [left bottom width height]
+    set(gcf, 'Position', [0, 300, 800, 500])
+    xlim([-10,50]); ylim([-10,20]); zlim([-10,50]);
+    % set viewpoint
+    view(0, 0);
+    set(gca, 'CameraUpVector', [0, 0, 1]);
+    xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
+    grid on
+    hold on
+    % plot
+    cameraSize = 2;
+    comOrigin = plotCamera('Size', cameraSize, 'Location',...
+        [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0);
+    camInitialization = plotCamera('Size', cameraSize, 'Location',...
+        t_initial, 'Orientation', R_initial,'Color', 'r', 'Opacity', 0);
+    trajectory = plot3(0, 0, 0, 'b-');
+    legend('Estimated Trajectory');
+    title('Camera trajectory');
+    % plot 3D landmarks
+    legend('Initial 3D landmarks');
+    scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 5); hold on; grid on;
+    legend('AutoUpdate','off');
 
 %% Continuous operation
-n_frames = 100;
-range = (bootstrap_frames(2)+1):bootstrap_frames(2)+n_frames;
-% range = (bootstrap_frames(2)+1):last_frame;
-cam_poses = zeros(3,4,n_frames);
+range = (bootstrap_frames(2)+1):last_frame;
 
 for i = range
     fprintf('\n\nProcessing frame %d\n=====================', i);
@@ -256,22 +273,33 @@ for i = range
     
     %% Process next frame and store new camera pose
     [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_cameraPose);
-    cam_poses(:,:,i) = pose;
-    R = cam_poses(1:3,1:3,i); t = cam_poses(1:3,4,i);
+    cam_poses = cat(3,cam_poses,pose);
+    locations = cat(1,locations,pose(:,4)');
     
     %% Plot current camera pose and newly triangulated landmarks
-    figure(f_cameraPose);
-    subplot(2,2,1);
-    % plotCamera('Location', t', 'Orientation', R, 'Opacity', 0, 'Color', [0,1,0]);
-    % construct arrow to visualie camera pose
-    p1=t; p2=t+R*[0;0;3];
-    mArrow3(p1,p2, 'stemWidth', 0.05);
-    % scatter3(prev_t(1),prev_t(2),prev_t(3),'b+');
-    % legend('3d pts', '1st cam', '2nd cam');
-
-    % Plot newly triangulated keypoints as well (SOME BUGS FOR NOW !)
-    % scatter3(state.X(:, 1), state.X(:, 2), state.X(:, 3), 5); hold on; grid on;
+%     figure(f_cameraPose);
+%     subplot(2,2,1);
+%     % plotCamera('Location', t', 'Orientation', R, 'Opacity', 0, 'Color', [0,1,0]);
+%     % construct arrow to visualie camera pose
+%     p1=t; p2=t+R*[0;0;3];
+%     mArrow3(p1,p2, 'stemWidth', 0.05);
+%     % scatter3(prev_t(1),prev_t(2),prev_t(3),'b+');
+%     % legend('3d pts', '1st cam', '2nd cam');
+% 
+%     % Plot newly triangulated keypoints as well (SOME BUGS FOR NOW !)
+%     % scatter3(state.X(:, 1), state.X(:, 2), state.X(:, 3), 5); hold on; grid on;
     
+    %% Plot camera trajectory
+    figure(f_cameraTrajectory);
+        % plot the estimated trajectory.
+        set(trajectory, 'XData', locations(:,1), 'YData', ...
+        locations(:,2), 'ZData', locations(:,3));
+        % plot landmarks
+        newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
+        if ~isempty(newKeypoints)
+            scatter3(newKeypoints(1), newKeypoints(2), newKeypoints(3), 5); hold on; grid on;
+        end
+
     %% Update input varibles for next iteration
     prev_img = image;
     prev_state = state;
