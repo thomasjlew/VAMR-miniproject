@@ -39,7 +39,6 @@ state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
 
 figure(resultDisplay);
-set(gcf, 'Position', [800, 300, 500, 500])
 showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
 
 %% step1.2: track potential keypoints in state.C
@@ -78,29 +77,37 @@ indexesTriangulated = false(length(state.C),1);
 for i=1:length(state.C)
     % Extract pose at the instant when candidate C was added
     
-    pose_C = reshape(state.T(i,:),[3,4]);
+    pose_F = reshape(state.T(i,:),[3,4]);
+    pose_C = pose;
     
     % construct camera matrices
-    M1 = cameraMatrix(intrinsics,pose_C(1:3,1:3),pose_C(1:3,4)');
-    M2 = cameraMatrix(intrinsics,pose(1:3,1:3),pose(1:3,4)');
+    M1 = cameraMatrix(intrinsics,pose_F(1:3,1:3),pose_F(1:3,4)');
+    M2 = cameraMatrix(intrinsics,pose_C(1:3,1:3),pose_C(1:3,4)');
     
-    % Triangulate landmark for each keypoint candidate
     landmark_C = triangulate(state.F(i,:),state.C(i,:),M1,M2);  % PROBLEM HERE: TRIANGULATED PTS ARE BEHIND CAMERA?!
                                                             % IDEA: estimate [R,t] using some pts with relativeCameraPose 
                                                             %       and RANSAC fundamental matrix computation
                                                             %       and compare with the one normally computed with odometry
     % Compute angle alpha(c)
-    baseline = pose(:,4)' - pose_C(1:3,4)';
-    dist_camera_to_landmark = landmark_C - pose_C(1:3,4)';
+    baseline = pose_C(:,4)' - pose_F(1:3,4)';
+    dist_camera_to_landmark = landmark_C - pose_F(1:3,4)';
     % By trigonometry, we have: sin(alpha/2) = (baseline/2)/dist_to_pt_3d.
     alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
     
     % Add triangulated keypoint if baseline large enough and remove from
     % candidates
     if abs(alpha) > params.AlphaThreshold
+        %showMatchedFeatures(prev_img,current_img,state.F(i,:),state.C(i,:));
         state.X = [state.X; landmark_C];
         state.P = [state.P; state.C(i,:)];
+              
         indexesTriangulated(i)=true;
+%         DEBUG
+%         reprojectedPoint = worldToImage(intrinsics,pose_C(:,1:3),pose_C(:,4),landmark_C)
+%         keypoint = state.C(i,:)
+%         figure(resultDisplay);
+%         showMatchedFeatures(prev_img,current_img,[state.F(i,:);reprojectedPoint],[state.C(i,:);state.C(i,:)]);
+%         landmark_C
     end
 end
 

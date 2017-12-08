@@ -3,7 +3,7 @@ clear;
 clc;
 close all;
 
-% ds = 0; % 0: KITTI, 1: Malaga, 2: parking
+% ds = 0; % 0: KmaiITTI, 1: Malaga, 2: parking
 % ds = 1; % 0: KITTI, 1: Malaga, 2: parking
 ds = 1; % 0: KITTI, 1: Malaga, 2: parking
 
@@ -224,8 +224,8 @@ prev_img = img1;
 
 %% Intialize plots
 % plot initial set of 3d landpoints and origin
-f_cameraPose = figure('Name','Feature Extraction');
-    set(gcf, 'Position', [800, 300, 500, 500],'InnerPosition',[0, 0, 500, 500]) 
+f_features = figure('Name','Feature Extraction');
+set(gcf, 'Position', [800, 300, 500, 500])
 
 % plot inital camera pose and landmarks
 f_cameraTrajectory = figure('Name','3D camera trajectory');
@@ -272,7 +272,7 @@ for i = range
     end
     
     %% Process next frame and store new camera pose
-    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_cameraPose);
+    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_features);
     cam_poses = cat(3,cam_poses,pose);
     locations = cat(1,locations,pose(:,4)');
     
