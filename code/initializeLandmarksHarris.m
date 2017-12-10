@@ -73,12 +73,6 @@ P = P2_inliers;
 
 fprintf('... Accomplished initialization \n');
 
-
-%% Additionnal functions to automaticly arrange figures
-disp('------------------------------------------------------------------');
-disp('Arrange figures to display nicely onto monitor');
-% autoArrangeFigures(0,0,1);
-
 end
 
 

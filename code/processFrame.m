@@ -1,4 +1,4 @@
-function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,resultDisplay)
+function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,resultDisplayKeypoints,resultDisplayCandidates,IsKeyframe)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
@@ -25,8 +25,7 @@ function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,re
 % pose: [3x4] transformation matrix [R|t] corresponding to the current camera pose
 
 % create empty struct for current state
-state = struct ('P', zeros(2,1),'X',zeros(3,1),'C',[],'F',[],'T',[]);
-% state = struct ('P', zeros(2,1),'X',zeros(3,1),'C',zeros(1,2),'F',zeros(2,1),'T',zeros(12,1));
+state = struct ('P', [],'X',[],'C',[],'F',[],'T',[],'L',[]);
 
 %% step1.1: track keypoints in state.P and select the corresponding landmarks
 % construct and initialize KLT point tracker
@@ -38,13 +37,13 @@ initialize(pointTracker,prev_state.P,prev_img);
 state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
 
-figure(resultDisplay);
+figure(resultDisplayKeypoints);
 showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
 
 %% step1.2: track potential keypoints in state.C
 % Remove lost (non tracked) keypoints.
 % construct and initialize KLT point tracker
-if ~isequal(prev_state.C,[0 0]) % Don't try to track non existent features (1st run)
+if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',params.MaxIterations, ...
         'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
     initialize(pointTracker,prev_state.C,prev_img);
@@ -58,76 +57,87 @@ if ~isequal(prev_state.C,[0 0]) % Don't try to track non existent features (1st 
 end
 
 %% step2: estimate the updated camera pose from 2D-3D correspondences
+warningstate = warning('off','vision:ransac:maxTrialsReached');
 intrinsics = cameraParameters('IntrinsicMatrix',K');
 [R,t] = estimateWorldCameraPose(state.P,state.X,intrinsics,...
-    'MaxNumTrials',params.MaxNumTrials,'Confidence',params.Confidence,'MaxReprojectionError',params.MaxReprojectionError);
+    'MaxNumTrials',params.MaxNumTrialsPnP,'Confidence',params.ConfidencePnP,'MaxReprojectionError',params.MaxReprojectionErrorPnP);
 pose = [R,t'];
+% Restore the original warning state
+warning(warningstate)
 
-%% step3: evaluate track (alpha) for every keypoint candidate in state.C [(M+N)x2]
-%   if alpha is above a certain threshold add the corresponding landmark to
-%   state.X and remove the candidate
-intrinsics = cameraParameters('IntrinsicMatrix',K');
-n_landmarks = length(state.X);
-indexesTriangulated = false(length(state.C),1);
+%% step3: Triangulate landmark of C and evaluate bearing angle alpha
 
-% @OPTIMIZATION - remove for loop ------------------------------------
-% create index vector corresp. to matches with same state.C & state.F
-%               and triangulate these pts together
-% @OPTIMIZATION ------------------------------------------------------
-for i=1:length(state.C)
-    % Extract pose at the instant when candidate C was added
+if IsKeyframe
     
-    pose_F = reshape(state.T(i,:),[3,4]);
-    pose_C = pose;
-    
-    % construct camera matrices
-    M1 = cameraMatrix(intrinsics,pose_F(1:3,1:3),pose_F(1:3,4)');
-    M2 = cameraMatrix(intrinsics,pose_C(1:3,1:3),pose_C(1:3,4)');
-    
-    landmark_C = triangulate(state.F(i,:),state.C(i,:),M1,M2);  % PROBLEM HERE: TRIANGULATED PTS ARE BEHIND CAMERA?!
-                                                            % IDEA: estimate [R,t] using some pts with relativeCameraPose 
-                                                            %       and RANSAC fundamental matrix computation
-                                                            %       and compare with the one normally computed with odometry
-    % Compute angle alpha(c)
-    baseline = pose_C(:,4)' - pose_F(1:3,4)';
-    dist_camera_to_landmark = landmark_C - pose_F(1:3,4)';
-    % By trigonometry, we have: sin(alpha/2) = (baseline/2)/dist_to_pt_3d.
-    alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
-    
-    % Add triangulated keypoint if baseline large enough and remove from
-    % candidates
-    if abs(alpha) > params.AlphaThreshold
-        %showMatchedFeatures(prev_img,current_img,state.F(i,:),state.C(i,:));
-        state.X = [state.X; landmark_C];
-        state.P = [state.P; state.C(i,:)];
-              
-        indexesTriangulated(i)=true;
-%         DEBUG
-%         reprojectedPoint = worldToImage(intrinsics,pose_C(:,1:3),pose_C(:,4),landmark_C)
-%         keypoint = state.C(i,:)
-%         figure(resultDisplay);
-%         showMatchedFeatures(prev_img,current_img,[state.F(i,:);reprojectedPoint],[state.C(i,:);state.C(i,:)]);
-%         landmark_C
+    %   if alpha is above a certain threshold add the corresponding landmark to
+    %   state.X and remove the candidate
+
+    figure(resultDisplayCandidates);
+    if ~isempty(state.C)
+        showMatchedFeatures(prev_img,current_img,state.F,state.C);
     end
+
+    landmarksC = zeros(length(state.C),3);
+    for i = 1:length(state.C)
+        pose_F = reshape(state.T(i,:),[3,4]);
+        pose_C = pose;
+
+        M1 = cameraMatrix(intrinsics,pose_C(:,1:3),-pose_C(:,4)'*pose_C(:,1:3));
+        M2 = cameraMatrix(intrinsics,pose_F(:,1:3),-pose_F(:,4)'*pose_F(:,1:3));
+
+        [landmarksC(i,:),~] = triangulate(state.C(i,:),state.F(i,:),M1,M2);
+        landmarksC(i,:) = landmarksC(i,:)*pose_C(:,1:3);
+    end
+
+    % RANSAC filtering
+    num_before_RANSAC = length(landmarksC);
+    num_after_RANSAC = length(landmarksC);
+    if ~isempty(state.C)
+        landmarksC = single(landmarksC);
+        [~,~,inlierIdx] = estimateWorldCameraPose(state.C,landmarksC,intrinsics,...
+            'MaxNumTrials',params.MaxNumTrialsRansac,'Confidence',params.ConfidenceRansac,'MaxReprojectionError',params.MaxReprojectionErrorRansac);
+        landmarksC = landmarksC(inlierIdx,:);
+        state.C = state.C(inlierIdx,:);
+        state.F = state.F(inlierIdx,:);
+        state.T = state.T(inlierIdx,:);
+        num_after_RANSAC = length(landmarksC);
+    end
+
+    % Move candidate landmarks with sufficient baseline to P,X
+    indexesTriangulated = false(length(state.C),1);
+    for i=1:length(landmarksC)
+        % Compute angle alpha(c)
+        baseline = norm(pose_C(:,4) - pose_F(:,4));
+        dist_camera_to_landmark = norm(landmarksC(i) - pose_F(:,4)');
+        alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
+
+        % Add triangulated keypoint if baseline large enough and remove from
+        % candidates
+        if abs(alpha) > params.AlphaThreshold
+            if landmarksC(i,3)>0
+                state.X = [state.X; landmarksC(i,:)];
+                state.P = [state.P; state.C(i,:)];
+            end
+            indexesTriangulated(i)=true;
+        end
+    end
+
+    state.C = state.C(~indexesTriangulated,:);
+    state.F = state.F(~indexesTriangulated,:);
+    state.T = state.T(~indexesTriangulated,:);
+else
+    num_before_RANSAC = length(state.C);
+    num_after_RANSAC = length(state.C);
 end
 
-state.C = state.C(~indexesTriangulated,:);
-state.F = state.F(~indexesTriangulated,:);
-state.T = state.T(~indexesTriangulated,:);
-
-fprintf('\n Added %d new 3D landmarks \n', length(state.X)-n_landmarks);
-
 %% step4: acquire N new keypoint candidates and add them to state.C [(M+N)x2]
-% state.C contains new keypoint tracks across multiple frames
-% ! doesn't include points tracked in state.P (2d pts) (eq. to state.X(3d))
-% ! include new tracks (=> save them in state.F later)
+% state.C contains new keypoint coordinates across multiple frames
 
 % Detect new keypoints with Harris
 C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts
-% TODO @OPTIMIZATION: Add other checks, such as 2d distance with other pts big enough
 % Extract Harris descriptors from keypoints state.P and keypoint candidates state.C
 [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  %% @OPTIMIZATION: save descriptors
 [descriptors_new, ~] = extractFeatures(current_img, C_new, 'BlockSize',params.BlockSizeHarris);                                  % and dont compute them each time
@@ -135,11 +145,12 @@ n_keypoints = length(C_new);
 % match newly detected candidates to keypoints and candiates from database
 indexPairs = matchFeatures(descriptors_prev,descriptors_new,'Unique',params.Unique, ...
                                 'MaxRatio',params.MaxRatio, 'MatchThreshold', params.MatchThreshold);
+                            
 % remove matched keypoints: we don't want to add already tracked keypoints
 C_new = removerows(C_new,'ind',indexPairs(:,2));
 
 % check if new keypoints are too close to an existing keypoint
-distC = pdist2(C_new.Location,state.P);
+distC = pdist2(C_new.Location,[state.P]);
 indicesC = true(length(C_new),1);
 for i =1:length(C_new)
     % if any keypoint is close than 1 px discard candidate
@@ -157,7 +168,9 @@ state.F = [state.F; C_new.Location]; % 1st observation of feature
 % form row vector from (3x4) pose matrix and write it N times to sate.T
 T_new = repmat(reshape(pose,[1,12]),length(C_new),1);
 state.T = [state.T; T_new];
-fprintf('%d new candidates, %d remaining after duplicate removal, %d total keypoints, %d total candidates \n',...
-    n_keypoints,length(C_new),length(state.P),length(state.C));
+
+% status display
+fprintf('\n %d new candidates, %d remaining after duplicate removal, , %d total keypoints, %d total candidates, %d rejected by RANSAC \n',...
+    n_keypoints,length(C_new),length(state.P),length(state.C),num_before_RANSAC-num_after_RANSAC);
 end
 
