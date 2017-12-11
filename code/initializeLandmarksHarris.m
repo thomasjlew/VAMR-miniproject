@@ -1,4 +1,4 @@
-function [P,X,R,t] = initializeLandmarksHarris(kf1,kf2,K,params)
+function [P,X,orientation,location] = initializeLandmarksHarris(kf1,kf2,K,params)
 % Initializes a first set of landmarks from two manually selected keyframes
 % step1: extract keypoint-descriptors from first and second keyframe
 % step2: match keypoints across frames
@@ -26,9 +26,6 @@ P1 = detectHarrisFeatures(kf1,'MinQuality',params.MinQuality,'FilterSize',params
 P2 = detectHarrisFeatures(kf2,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 fprintf('\n detected %d keypoints in keyframe 1', length(P1));
 fprintf('\n detected %d keypoints in keyframe 2 \n', length(P2));
-% Harris feature extraction
-%[descriptors1,P1_valid] = extractFeatures(kf1,P1,'BlockSize',params.BlockSizeHarris);
-%[descriptors2,P2_valid] = extractFeatures(kf2,P2,'BlockSize',params.BlockSizeHarris);
 
 %% step2: match keypoints across frames
 % KLT tracking
@@ -38,11 +35,6 @@ initialize(tracker,P1.Location,kf1);
 [P2, validIdx] = step(tracker, kf2);
 P1_matched = P1.Location(validIdx, :);
 P2_matched = P2(validIdx, :);
-% Harris matching
-%indexPairs = matchFeatures(descriptors1,descriptors2,'Unique',params.Unique,'MaxRatio',params.MaxRatio);
-% select only the matched keypoints
-%P1_matched = P1_valid(indexPairs(:,1),:);
-%P2_matched = P2_valid(indexPairs(:,2),:);
 fprintf('\n matched %d keypoints across keyframes \n', length(P1_matched));
 
 %% step3: apply RANSAC filter to reject outliers and estimate Fundamental
@@ -55,13 +47,14 @@ fprintf('\n after RANSAC: %d remaining matches \n', length(P1_inliers));
 % Plot matches
 figure('Name','Keypoint matches after RANSAC'); 
 showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
+set(gcf, 'Position', [800, 300, 500, 500])
 
 % construct cameraIntrinsics object that can be passed to function
 % relativeCameraPose()
 intrinsics = cameraParameters('IntrinsicMatrix',K'); %%CAREFUL: TRANSPOSE!
 % calculate relative rot. and translation from camera poses in kf1 to kf2
-[orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
-[R, t] = cameraPoseToExtrinsics(orient, location);
+[orientation,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
+[R, t] = cameraPoseToExtrinsics(orientation, location);
 
 %% step4: triangulate landmarks
 M1 = cameraMatrix(intrinsics,eye(3),[0 0 0]); %K*[R;t]  => 4x3
@@ -79,12 +72,6 @@ P = P2_inliers;
 % % DEBUG
 
 fprintf('... Accomplished initialization \n');
-
-
-%% Additionnal functions to automaticly arrange figures
-disp('------------------------------------------------------------------');
-disp('Arrange figures to display nicely onto monitor');
-% autoArrangeFigures(0,0,1);
 
 end
 
