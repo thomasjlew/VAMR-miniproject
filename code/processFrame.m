@@ -33,9 +33,20 @@ pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',
     'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
 initialize(pointTracker,prev_state.P,prev_img);
 % use KLT point tracker to track keypoints from previous frame
-[P,indexes_tracked] = step(pointTracker,current_img);
-state.P = P(indexes_tracked,:);
-state.X = prev_state.X(indexes_tracked,:);
+[P,indexes_tracked, scores_P] = step(pointTracker,current_img);
+% use only the keypoints with the largest scores, limit number of keypoints
+P_pos = all(P(indexes_tracked,:) > 0,2);  %only positive points
+[scores_sort scores_idx_sort] = sort(scores_P(P_pos), 'descend');
+if length(scores_sort) < 100
+    num_scores = length(scores_sort);
+else
+    num_scores = 100;
+end
+P_neu = P(scores_idx_sort(1:num_scores),:);
+state.P = P_neu;
+state.X = prev_state.X(scores_idx_sort(1:num_scores),:);
+%state.P = P(indexes_tracked,:)
+%state.X = prev_state.X(indexes_tracked,:);
 
 %% step1.2: track potential keypoints in state.C
 % Remove lost (non tracked) keypoints.
@@ -45,12 +56,23 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
         'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
     initialize(pointTracker,prev_state.C,prev_img);
     % use KLT point tracker to track keypoints from previous frame
-    [C_tracked,indexes_tracked] = step(pointTracker,current_img);
+    [C_tracked,indexes_tracked, scores_C] = step(pointTracker,current_img);
     % update candidate coordinates
-    state.C = C_tracked(indexes_tracked,:);
+    C_pos = all(C_tracked(indexes_tracked,:) > 0,2);  %only positive points
+    [scores_sort scores_idx_sort] = sort(scores_C(C_pos), 'descend');
+    if length(scores_sort) < 100
+        num_scores = length(scores_sort);
+    else
+        num_scores = 100;
+    end
+    C_neu = C_tracked(scores_idx_sort(1:num_scores),:);
+    state.C = C_neu;
+    % state.C = C_tracked(indexes_tracked,:);
     % Remove non tracked features
-    state.F = prev_state.F(indexes_tracked,:);
-    state.T = prev_state.T(indexes_tracked,:);
+    state.F = prev_state.F(scores_idx_sort(1:num_scores),:);
+    state.T = prev_state.T(scores_idx_sort(1:num_scores),:);
+%     state.F = prev_state.F(indexes_tracked,:);
+%     state.T = prev_state.T(indexes_tracked,:);
 
     figure(resultDisplayCandidates)
     showMatchedFeatures(prev_img,current_img,state.F,state.C);
@@ -120,7 +142,7 @@ end
 % Detect new keypoints with Harris
 C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 n_keypoints = length(C_new);
-
+CP= cornerPoints([state.P;state.C])
 % Remove pts which are matched against currently tracked keypts
 % Extract Harris descriptors from keypoints state.P and keypoint candidates state.C
 [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  %% @OPTIMIZATION: save descriptors
@@ -137,7 +159,7 @@ C_new = removerows(C_new,'ind',indexPairs(:,2));
 distC = pdist2(C_new.Location,[state.P]);
 indicesC = true(length(C_new),1);
 for i =1:length(C_new)
-    % if any keypoint is close than 1 px discard candidate
+    % if any keypoint is close than 10 px discard candidate
     if min(distC(i,:))<params.MinDistance
         indicesC(i)=false;
     end
