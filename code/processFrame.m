@@ -37,9 +37,6 @@ initialize(pointTracker,prev_state.P,prev_img);
 state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
 
-figure(resultDisplayKeypoints);
-showMatchedFeatures(prev_img,current_img,prev_state.P(indexes_tracked,:),state.P);
-
 %% step1.2: track potential keypoints in state.C
 % Remove lost (non tracked) keypoints.
 % construct and initialize KLT point tracker
@@ -54,16 +51,26 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     % Remove non tracked features
     state.F = prev_state.F(indexes_tracked,:);
     state.T = prev_state.T(indexes_tracked,:);
+
+    figure(resultDisplayCandidates)
+    showMatchedFeatures(prev_img,current_img,state.F,state.C);
 end
 
 %% step2: estimate the updated camera pose from 2D-3D correspondences
 warningstate = warning('off','vision:ransac:maxTrialsReached');
 intrinsics = cameraParameters('IntrinsicMatrix',K');
-[R,t] = estimateWorldCameraPose(state.P,state.X,intrinsics,...
+[orientation,location,inlierIdx] = estimateWorldCameraPose(state.P,state.X,intrinsics,...
     'MaxNumTrials',params.MaxNumTrialsPnP,'Confidence',params.ConfidencePnP,'MaxReprojectionError',params.MaxReprojectionErrorPnP);
-pose = [R,t'];
+pose = [orientation,location'];
+[R,t] = cameraPoseToExtrinsics(orientation,location);
 % Restore the original warning state
 warning(warningstate)
+
+figure(resultDisplayKeypoints);
+imshow(current_img); hold on;
+scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
+scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
+hold off;
 
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
 
@@ -72,42 +79,22 @@ if IsKeyframe
     %   if alpha is above a certain threshold add the corresponding landmark to
     %   state.X and remove the candidate
 
-    figure(resultDisplayCandidates);
-    if ~isempty(state.C)
-        showMatchedFeatures(prev_img,current_img,state.F,state.C);
-    end
-
     landmarksC = zeros(length(state.C),3);
     for i = 1:length(state.C)
         pose_F = reshape(state.T(i,:),[3,4]);
-        pose_C = pose;
+        [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
 
-        M1 = cameraMatrix(intrinsics,pose_C(:,1:3),-pose_C(:,4)'*pose_C(:,1:3));
-        M2 = cameraMatrix(intrinsics,pose_F(:,1:3),-pose_F(:,4)'*pose_F(:,1:3));
+        M1 = cameraMatrix(intrinsics,R,t);
+        M2 = cameraMatrix(intrinsics,R_F,t_F);
 
         [landmarksC(i,:),~] = triangulate(state.C(i,:),state.F(i,:),M1,M2);
-        landmarksC(i,:) = landmarksC(i,:)*pose_C(:,1:3);
-    end
-
-    % RANSAC filtering
-    num_before_RANSAC = length(landmarksC);
-    num_after_RANSAC = length(landmarksC);
-    if ~isempty(state.C)
-        landmarksC = single(landmarksC);
-        [~,~,inlierIdx] = estimateWorldCameraPose(state.C,landmarksC,intrinsics,...
-            'MaxNumTrials',params.MaxNumTrialsRansac,'Confidence',params.ConfidenceRansac,'MaxReprojectionError',params.MaxReprojectionErrorRansac);
-        landmarksC = landmarksC(inlierIdx,:);
-        state.C = state.C(inlierIdx,:);
-        state.F = state.F(inlierIdx,:);
-        state.T = state.T(inlierIdx,:);
-        num_after_RANSAC = length(landmarksC);
     end
 
     % Move candidate landmarks with sufficient baseline to P,X
     indexesTriangulated = false(length(state.C),1);
     for i=1:length(landmarksC)
         % Compute angle alpha(c)
-        baseline = norm(pose_C(:,4) - pose_F(:,4));
+        baseline = norm(t - pose_F(:,4));
         dist_camera_to_landmark = norm(landmarksC(i) - pose_F(:,4)');
         alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
 
@@ -125,9 +112,6 @@ if IsKeyframe
     state.C = state.C(~indexesTriangulated,:);
     state.F = state.F(~indexesTriangulated,:);
     state.T = state.T(~indexesTriangulated,:);
-else
-    num_before_RANSAC = length(state.C);
-    num_after_RANSAC = length(state.C);
 end
 
 %% step4: acquire N new keypoint candidates and add them to state.C [(M+N)x2]
@@ -170,7 +154,7 @@ T_new = repmat(reshape(pose,[1,12]),length(C_new),1);
 state.T = [state.T; T_new];
 
 % status display
-fprintf('\n %d new candidates, %d remaining after duplicate removal, , %d total keypoints, %d total candidates, %d rejected by RANSAC \n',...
-    n_keypoints,length(C_new),length(state.P),length(state.C),num_before_RANSAC-num_after_RANSAC);
+fprintf('\n %d new candidates, %d remaining after duplicate removal, , %d total keypoints, %d total candidates \n',...
+    n_keypoints,length(C_new),length(state.P),length(state.C));
 end
 

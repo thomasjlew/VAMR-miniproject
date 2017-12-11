@@ -1,4 +1,4 @@
-function [P,X,R,t] = initializeLandmarksHarris(kf1,kf2,K,params)
+function [P,X,orientation,location] = initializeLandmarksHarris(kf1,kf2,K,params)
 % Initializes a first set of landmarks from two manually selected keyframes
 % step1: extract keypoint-descriptors from first and second keyframe
 % step2: match keypoints across frames
@@ -53,8 +53,8 @@ set(gcf, 'Position', [800, 300, 500, 500])
 % relativeCameraPose()
 intrinsics = cameraParameters('IntrinsicMatrix',K'); %%CAREFUL: TRANSPOSE!
 % calculate relative rot. and translation from camera poses in kf1 to kf2
-[orient,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
-[R, t] = cameraPoseToExtrinsics(orient, location);
+[orientation,location] = relativeCameraPose(F,intrinsics,P1_inliers,P2_inliers);
+[R, t] = cameraPoseToExtrinsics(orientation, location);
 
 %% step4: triangulate landmarks
 M1 = cameraMatrix(intrinsics,eye(3),[0 0 0]); %K*[R;t]  => 4x3
