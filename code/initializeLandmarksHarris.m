@@ -45,7 +45,7 @@ P1_inliers = P1_matched(inliersIndex,:);
 P2_inliers = P2_matched(inliersIndex,:);
 fprintf('\n after RANSAC: %d remaining matches \n', length(P1_inliers));
 % Plot matches
-figure('Name','Keypoint matches after RANSAC'); 
+figure('Name','Bootstrapping: Keypoint matches after RANSAC'); 
 showMatchedFeatures(kf1,kf2,P1_inliers,P2_inliers);
 set(gcf, 'Position', [800, 300, 500, 500])
 
@@ -62,14 +62,12 @@ M2 = cameraMatrix(intrinsics,R,t);
 
 X = triangulate(P1_inliers,P2_inliers,M1,M2);
 P = P2_inliers;
-
-% DEBUG
-% f_cameraPose = figure('Name','3D camera trajectory');
-% xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
-% hold on; grid on;
-% % figure(f_cameraPose);
-% scatter3(X(:, 1), X(:, 2), X(:, 3), 5); hold on; grid on;
-% % DEBUG
+% remove landmarks that are to far away and landmarks that are behind the
+% camera
+distX = sqrt(sum(X.^2,2));
+outlierIndixes = distX<2*mean(distX) & X(:,3)>0;
+X = X(outlierIndixes, :);
+P = P(outlierIndixes, :);
 
 fprintf('... Accomplished initialization \n');
 

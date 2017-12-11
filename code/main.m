@@ -24,7 +24,8 @@ if ds == 0
     % initialization parameters KITTI
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 15e-5, ...   
+    'MinQuality', 15e-5, ...               
+    'FilterSize', 15, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
     'DistanceThreshold', 0.2, ...
@@ -211,9 +212,9 @@ prev_img = img1;
 %% Intialize plots
 % plot initial set keypoints and krypoint tracks
 f_trackingP = figure('Name','Feature Tracking Keypoints');
-    set(gcf, 'Position', [800, 800, 500, 500])
-f_trackingC = figure('Name','Feature Tracking Keypoint Candidates');
-    set(gcf, 'Position', [800, 0, 500, 500])
+    set(gcf, 'Position', [800, 1000, 500, 500])
+% f_trackingC = figure('Name','Feature Tracking Keypoint Candidates');
+%     set(gcf, 'Position', [800, 0, 500, 500])
 
 % plot inital camera pose and landmarks
 f_cameraTrajectory = figure('Name','3D camera trajectory');
@@ -229,15 +230,14 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     % plot camera
     cameraSize = 1.5;
     comOrigin = plotCamera('Size', cameraSize, 'Location',...
-        [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0);
-    cam = plotCamera('Size', cameraSize, 'Location',...
-        location_initial, 'Orientation', orientation_inital,'Color', 'r', 'Opacity', 0);
-    trajectory = plot3(0, 0, 0, 'b-');
-    legend('Estimated Trajectory');
+        [0 0 0], 'Orientation', eye(3),'Color', 'r', 'Opacity', 0.2);
+    cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
+        'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'black', 'Opacity', 0.2);
+    trajectory = plot3(0, 0, 0, 'black-','LineWidth',3);   
     title('Camera trajectory');
     % plot 3D landmarks
-    legend('Initial 3D landmarks');
-    scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 5); hold on; grid on;
+    landmarks_scatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 8, 'o','b'); grid on;
+    legend('Estimated Trajectory');
     legend('AutoUpdate','off');
 
 %% Continuous operation
@@ -247,15 +247,21 @@ IsKeyframe = false;
 for i = range
     fprintf('\n Processing frame %d\n=====================', i);
     %% Load next image from dataset
-    if ds == 0
+    if ds == 0 %KITTI
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
-    elseif ds == 1
+        figure(f_cameraTrajectory);
+        xlim([-20,70]); ylim([-10,20]); zlim([-5,100]);
+    elseif ds == 1 %Malaga
         image = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(i).name]));
-    elseif ds == 2
+        figure(f_cameraTrajectory);
+        xlim([-40,40]); ylim([-10,20]); zlim([-5,100]);
+    elseif ds == 2 %Parking
         image = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
+        figure(f_cameraTrajectory);
+        xlim([-5,70]); ylim([-10,20]); zlim([-5,50]);
     else
         assert(false);
     end
@@ -267,22 +273,26 @@ for i = range
     else
         IsKeyframe=false;
     end
-    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_trackingP,f_trackingC,IsKeyframe);
+    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_trackingP,IsKeyframe);
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
 
     %% Plot camera trajectory
     figure(f_cameraTrajectory);
         % plot the estimated trajectory.
-        set(trajectory, 'XData', camLocations(:,1), 'YData', ...
-        camLocations(:,2), 'ZData', camLocations(:,3));
+        set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
+        smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
         cam.Location = camLocations(end,:);
         cam.Orientation = camOrientations(:,:,end);
         % plot landmarks
         newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
         if ~isempty(newKeypoints)
-            scatter3(newKeypoints(:,1), newKeypoints(:,2), newKeypoints(:,3), 5); hold on; grid on;
+            landmarks_scatter.XData = state.X(:,1);
+            landmarks_scatter.YData = state.X(:,2);
+            landmarks_scatter.ZData = state.X(:,3);
         end
+%     figure(f_trackingC);
+%         showMatchedFeatures(prev_img,image,state.F,state.C);
 
     %% Update input varibles for next iteration
     prev_img = image;
