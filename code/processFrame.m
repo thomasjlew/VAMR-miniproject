@@ -1,4 +1,4 @@
-function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,f_trackingP,IsKeyframe)
+function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,K,f_trackingP,IsKeyframe)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
@@ -33,7 +33,8 @@ pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',
     'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
 initialize(pointTracker,prev_state.P,prev_img);
 % use KLT point tracker to track keypoints from previous frame
-[P,indexes_tracked] = step(pointTracker,current_img);
+[P,indexes_tracked,scores] = step(pointTracker,current_img);
+avgKeypointScore = 100*mean(scores);
 state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
 
@@ -71,6 +72,8 @@ imshow(current_img); hold on;
 scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
 scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
 hold off;
+
+inlierShare = nnz(inlierIdx)/length(state.P);
 
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
 
