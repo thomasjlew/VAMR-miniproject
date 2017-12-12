@@ -1,4 +1,4 @@
-function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,resultDisplayKeypoints,resultDisplayCandidates,IsKeyframe)
+function [state,pose] = processFrame(prev_state,prev_img,current_img,params,K,f_trackingP,IsKeyframe)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
@@ -52,8 +52,8 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     state.F = prev_state.F(indexes_tracked,:);
     state.T = prev_state.T(indexes_tracked,:);
 
-    figure(resultDisplayCandidates)
-    showMatchedFeatures(prev_img,current_img,state.F,state.C);
+%     figure(resultDisplayCandidates)
+%     showMatchedFeatures(prev_img,current_img,state.F,state.C);
 end
 
 %% step2: estimate the updated camera pose from 2D-3D correspondences
@@ -66,7 +66,7 @@ pose = [orientation,location'];
 % Restore the original warning state
 warning(warningstate)
 
-figure(resultDisplayKeypoints);
+figure(f_trackingP);
 imshow(current_img); hold on;
 scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
 scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
@@ -108,7 +108,14 @@ if IsKeyframe
             indexesTriangulated(i)=true;
         end
     end
-
+    
+    % remove landmarks that are to far away and landmarks that are behind the
+    % camera
+    distX = sqrt(sum(state.X.^2,2));
+    outlierIndixes = distX<2*mean(distX) & state.X(:,3)>0;
+    state.X = state.X(outlierIndixes, :);
+    state.P = state.P(outlierIndixes, :);
+    
     state.C = state.C(~indexesTriangulated,:);
     state.F = state.F(~indexesTriangulated,:);
     state.T = state.T(~indexesTriangulated,:);
