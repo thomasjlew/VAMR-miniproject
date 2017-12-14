@@ -39,7 +39,7 @@ if ds == 0
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
-    'MaxIterations',20, ...         
+    'MaxIterations',15, ...         
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     ... % P3P parameters 
@@ -95,17 +95,17 @@ elseif ds == 1
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
-    'MaxIterations',30, ...         
+    'MaxIterations',15, ...         
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     ... % P3P parameters 
-    'MaxNumTrialsPnP',1000, ...            
-    'ConfidencePnP',95,...
-    'MaxReprojectionErrorPnP', 2, .....
+    'MaxNumTrialsPnP',2000, ...            
+    'ConfidencePnP',98,...
+    'MaxReprojectionErrorPnP', 1, .....
     ... % Triangulation parameters
-    'AlphaThreshold', 8 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
+    'AlphaThreshold', 6 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 20e-5, ... % higher => less keypoints
+    'MinQuality', 15e-5, ... % higher => less keypoints
     'FilterSize', 11, ...
     ... % Matching parameters for duplicate keypoint removal
     'BlockSizeHarris', 11, ... % feature extraction parameters
@@ -113,7 +113,7 @@ elseif ds == 1
     'MatchThreshold', 100.0,...  % lower  => less  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 15 ...
+    'MinDistance', 9 ...
     );
 
 %% Establish parking dataset
@@ -215,7 +215,17 @@ f_trackingP = figure('Name','Feature Tracking Keypoints');
     set(gcf, 'Position', [800, 1000, 500, 500])
 % f_trackingC = figure('Name','Feature Tracking Keypoint Candidates');
 %     set(gcf, 'Position', [800, 0, 500, 500])
-
+f_keypointScores = figure('Name','Average Keypoint Score');
+    set(gcf, 'Position', [800, 200, 500, 150])
+    frameCount = 0;
+    keypointCount = 0;
+    scores = 1;
+    subplot(1,2,1);
+        xlabel('frame count');ylabel('share of inliers');
+        title('Share of Inlier Keypoints');
+    subplot(1,2,2);
+        xlabel('frame count');ylabel('number keypoint');
+        title('Number of tracked Keypoints');
 % plot inital camera pose and landmarks
 f_cameraTrajectory = figure('Name','3D camera trajectory');
     % set window position and size [left bottom width height]
@@ -241,7 +251,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     legend('AutoUpdate','off');
 
 %% Continuous operation
-range = (bootstrap_frames(2)+1):last_frame;
+range = (bootstrap_frames(2)+1):500;
 IsKeyframe = false;
 
 for i = range
@@ -250,7 +260,7 @@ for i = range
     if ds == 0 %KITTI
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
         figure(f_cameraTrajectory);
-        xlim([-20,70]); ylim([-10,20]); zlim([-5,100]);
+        xlim([-10,40]); ylim([-10,20]); zlim([-5,40]);
     elseif ds == 1 %Malaga
         image = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
@@ -261,7 +271,7 @@ for i = range
         image = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
         figure(f_cameraTrajectory);
-        xlim([-5,70]); ylim([-10,20]); zlim([-5,50]);
+        xlim([-5,40]); ylim([-10,20]); zlim([-5,50]);
     else
         assert(false);
     end
@@ -273,7 +283,7 @@ for i = range
     else
         IsKeyframe=false;
     end
-    [state,pose] = processFrame(prev_state,prev_img,image,params_continouos,K,f_trackingP,IsKeyframe);
+    [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,K,f_trackingP,IsKeyframe);
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
 
@@ -293,9 +303,29 @@ for i = range
         end
 %     figure(f_trackingC);
 %         showMatchedFeatures(prev_img,image,state.F,state.C);
+      figure(f_keypointScores);  
+        subplot(1,2,1);
+            scores = cat(1,scores,inlierShare);
+            frameCount = cat(1,frameCount,i);
+            plot(frameCount,scores,'-');
+        subplot(1,2,2);
+            keypointCount = cat(1,keypointCount,length(state.P));
+            plot(frameCount,keypointCount,'-');
 
     %% Update input varibles for next iteration
     prev_img = image;
     prev_state = state;
     
 end
+%% plot
+%     figure(f_cameraTrajectory);
+%         % plot the estimated trajectory.
+%         set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
+%         smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
+%         cam.Location = camLocations(end,:);
+%         cam.Orientation = camOrientations(:,:,end);
+%         % plot landmarks
+%         newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
+%             landmarks_scatter.XData = state.X(:,1);
+%             landmarks_scatter.YData = state.X(:,2);
+%             landmarks_scatter.ZData = state.X(:,3);
