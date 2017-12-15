@@ -1,11 +1,11 @@
-function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,K,f_trackingP,IsKeyframe)
+function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,cameraParams,f_trackingP,IsKeyframe,live_plotting)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
 % steC: estimate the updated camera pose from 2D-3D correspondences
 % step3: acquire N new keypoint candidates and add them to state.C [2x(M+N)]
 % step4: for every of N candidates write the current camera pose to state.T [12x(M+N]
-% step5: evaluate track for every keypoint candidate state.F [2x(M+N)]
+% step5: evaluate track for every keypoint candidate state.F_C [2x(M+N)]
 % step6: triangulate landmarks for all keypoints with sufficient track length and sufficient base line
 % step7: move candidate keypoints from state.C to state.P
 %
@@ -13,19 +13,19 @@ function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img
 %       prev_state.P: [Nx2] keypoints
 %       prev_state.X: [Nx3] landmarks ordered corresponding to keypoints
 %       prev_state.C: [Mx2] candidate keypoints to be evaluated
-%       prev_state.F: [Mx2] observed tracks for candidate keypoints
+%       prev_state.F_C: [Mx2] observed tracks for candidate keypoints
 %       prev_state.T: [Mx12] camera poses at first observation of
 %       candidates
 % prev_img: [HxW] last processed intensity img
 % current_img: [HxW] intensity img
 % params: [1x?] struct array containing all tuning parameters set in main.n
-% K: [3x3] camera intrinsics
+% K: [3x3] camera cameraParams
 %
 % state: [1x5] struct array containing the new state of the processed frame
 % pose: [3x4] transformation matrix [R|t] corresponding to the current camera pose
 
 % create empty struct for current state
-state = struct ('P', [],'X',[],'C',[],'F',[],'T',[],'L',[]);
+state = struct ('P', [],'F_P',{{}},'X',[],'C',[],'F_C',{{}},'T',[]);
 
 %% step1.1: track keypoints in state.P and select the corresponding landmarks
 % construct and initialize KLT point tracker
@@ -33,10 +33,15 @@ pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',
     'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
 initialize(pointTracker,prev_state.P,prev_img);
 % use KLT point tracker to track keypoints from previous frame
-[P,indexes_tracked,scores] = step(pointTracker,current_img);
-avgKeypointScore = 100*mean(scores);
+[P,indexes_tracked] = step(pointTracker,current_img);
 state.P = P(indexes_tracked,:);
 state.X = prev_state.X(indexes_tracked,:);
+state.F_P = prev_state.F_P(indexes_tracked,:);
+
+% add current coordinates to keypoint tracks
+for i = 1:length(state.P)
+    state.F_P{i} = [state.F_P{i};state.P(i,:)];
+end
 
 %% step1.2: track potential keypoints in state.C
 % Remove lost (non tracked) keypoints.
@@ -49,29 +54,32 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     [C_tracked,indexes_tracked] = step(pointTracker,current_img);
     % update candidate coordinates
     state.C = C_tracked(indexes_tracked,:);
-    % Remove non tracked features
-    state.F = prev_state.F(indexes_tracked,:);
+    % remove non tracked features
+    state.F_C = prev_state.F_C(indexes_tracked,:);
     state.T = prev_state.T(indexes_tracked,:);
-
-%     figure(resultDisplayCandidates)
-%     showMatchedFeatures(prev_img,current_img,state.F,state.C);
+    
+    % add current coordinates to keypoint tracks
+    for i = 1:length(state.C)
+        state.F_C{i} = [state.F_C{i};state.C(i,:)];
+    end
 end
 
 %% step2: estimate the updated camera pose from 2D-3D correspondences
 warningstate = warning('off','vision:ransac:maxTrialsReached');
-intrinsics = cameraParameters('IntrinsicMatrix',K');
-[orientation,location,inlierIdx] = estimateWorldCameraPose(state.P,state.X,intrinsics,...
+[orientation,location,inlierIdx] = estimateWorldCameraPose(state.P,state.X,cameraParams,...
     'MaxNumTrials',params.MaxNumTrialsPnP,'Confidence',params.ConfidencePnP,'MaxReprojectionError',params.MaxReprojectionErrorPnP);
 pose = [orientation,location'];
 [R,t] = cameraPoseToExtrinsics(orientation,location);
 % Restore the original warning state
 warning(warningstate)
 
-figure(f_trackingP);
-imshow(current_img); hold on;
-scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
-scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
-hold off;
+if live_plotting
+    figure(f_trackingP);
+    imshow(current_img); hold on;
+    scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
+    scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
+    hold off;
+end
 
 inlierShare = nnz(inlierIdx)/length(state.P);
 
@@ -87,10 +95,10 @@ if IsKeyframe
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
 
-        M1 = cameraMatrix(intrinsics,R,t);
-        M2 = cameraMatrix(intrinsics,R_F,t_F);
+        M1 = cameraMatrix(cameraParams,R,t);
+        M2 = cameraMatrix(cameraParams,R_F,t_F);
 
-        [landmarksC(i,:),~] = triangulate(state.C(i,:),state.F(i,:),M1,M2);
+        [landmarksC(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(1,:),M1,M2);
     end
 
     % Move candidate landmarks with sufficient baseline to P,X
@@ -107,6 +115,7 @@ if IsKeyframe
             if landmarksC(i,3)>0
                 state.X = [state.X; landmarksC(i,:)];
                 state.P = [state.P; state.C(i,:)];
+                state.F_P = [state.F_P; state.F_C{i}];
             end
             indexesTriangulated(i)=true;
         end
@@ -118,9 +127,10 @@ if IsKeyframe
     outlierIndixes = distX<2*mean(distX) & state.X(:,3)>0;
     state.X = state.X(outlierIndixes, :);
     state.P = state.P(outlierIndixes, :);
+    state.F_P = state.F_P(outlierIndixes, :);
     
     state.C = state.C(~indexesTriangulated,:);
-    state.F = state.F(~indexesTriangulated,:);
+    state.F_C = state.F_C(~indexesTriangulated,:);
     state.T = state.T(~indexesTriangulated,:);
 end
 
@@ -129,6 +139,7 @@ end
 
 % Detect new keypoints with Harris
 C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+% C_new = selectStrongest(C_new, 200);
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts
@@ -156,7 +167,7 @@ C_new = C_new(indicesC,:);
 
 % add new keypoints to potentially future triangulated features
 state.C = [state.C; C_new.Location];
-state.F = [state.F; C_new.Location]; % 1st observation of feature
+state.F_C = [state.F_C; mat2cell(C_new.Location,ones(length(C_new.Location),1),2)]; % 1st observation of feature
 
 % for every of N candidates write the current camera pose to state.T [(M+N)x12]
 % form row vector from (3x4) pose matrix and write it N times to sate.T
@@ -164,7 +175,7 @@ T_new = repmat(reshape(pose,[1,12]),length(C_new),1);
 state.T = [state.T; T_new];
 
 % status display
-fprintf('\n %d new candidates, %d remaining after duplicate removal, , %d total keypoints, %d total candidates \n',...
+fprintf('\n %d new candidates, %d remaining after duplicate removal, %d total keypoints, %d total candidates \n',...
     n_keypoints,length(C_new),length(state.P),length(state.C));
 end
 
