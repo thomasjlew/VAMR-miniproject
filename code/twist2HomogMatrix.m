@@ -14,3 +14,9 @@ se_matrix = [Cross2Matrix(w), v; 0 0 0 0]; % Lie algebra matrix
 H = expm(se_matrix);
 
 end
+
+function M = Cross2Matrix(x)
+
+M = [0,-x(3),x(2); x(3),0,-x(1);-x(2),x(1),0];
+
+end

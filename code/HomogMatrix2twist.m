@@ -23,3 +23,9 @@ w = Matrix2Cross(se_matrix(1:3,1:3));
 twist = [v; w];
 
 end
+
+function x = Matrix2Cross(M)
+
+x = [-M(2,3); M(1,3); -M(1,2)];
+
+end

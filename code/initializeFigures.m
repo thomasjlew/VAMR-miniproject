@@ -26,6 +26,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
     grid on
     hold on
+    legend('AutoUpdate','off');
     % plot camera
     cameraSize = 1.5;
     plotCamera('Size', cameraSize, 'Location',...
@@ -35,9 +36,8 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     trajectory = plot3(0, 0, 0, 'r-','LineWidth',3);   
     title('Camera trajectory');
     % plot 3D landmarks
-    landmarks_scatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 8, 'o','b'); grid on;
-    legend('Estimated Trajectory');
-    legend('AutoUpdate','off');
+    landmarks_scatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 1, 'o','b'); grid on;
+    %legend('Estimated Trajectory');
 
 end
 
