@@ -17,7 +17,8 @@ f_keypointScores = figure('Name','Share of Inliers');
 % plot inital camera pose and landmarks
 f_cameraTrajectory = figure('Name','3D camera trajectory');
     % set window position and size [left bottom width height]
-    set(gcf, 'Position', [0, 300, 800, 500])
+    set(gcf, 'Position', [0, 200, 700, 600])
+    axis equal
     xlim([-70,70]); ylim([-10,20]); zlim([-10,100]);
     % set viewpoint
     view(0, 0);

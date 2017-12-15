@@ -22,8 +22,14 @@ fprintf('Starting initialization ... \n');
 
 %% step1: extract keypoint-descriptors from first and second keyframe
 % Keypoint detection
-P1 = detectHarrisFeatures(kf1,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
-P2 = detectHarrisFeatures(kf2,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+P1 = detectSURFFeatures(kf1,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
+    params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
+P1 = selectStrongest(P1,500);
+P2 = detectSURFFeatures(kf2,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
+    params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
+P2 = selectStrongest(P2,500);
+% P1 = detectHarrisFeatures(kf1,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+% P2 = detectHarrisFeatures(kf2,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 fprintf('\n detected %d keypoints in keyframe 1', length(P1));
 fprintf('\n detected %d keypoints in keyframe 2 \n', length(P2));
 

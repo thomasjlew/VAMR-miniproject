@@ -78,19 +78,28 @@ if live_plotting
     imshow(current_img); hold on;
     scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
     scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
+    for i = 1:length(state.P)
+        plot(state.F_P{i}(:,1),state.F_P{i}(:,2),'-b');
+    end
     hold off;
 end
 
 inlierShare = nnz(inlierIdx)/length(state.P);
 
+% Remove landmarks that lie behind the camera
+X_camFrame = [R,t']*[state.X';ones(1,length(state.X))];
+state.X = state.X(X_camFrame(3,:)>0  & X_camFrame(3,:)<50,:);
+state.P = state.P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
+state.F_P = state.F_P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
+
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
 
-if IsKeyframe
+if IsKeyframe && ~isempty(state.C)
     
     %   if alpha is above a certain threshold add the corresponding landmark to
     %   state.X and remove the candidate
 
-    landmarksC = zeros(length(state.C),3);
+    X_C = zeros(length(state.C),3);
     for i = 1:length(state.C)
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
@@ -98,37 +107,35 @@ if IsKeyframe
         M1 = cameraMatrix(cameraParams,R,t);
         M2 = cameraMatrix(cameraParams,R_F,t_F);
 
-        [landmarksC(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(1,:),M1,M2);
+        [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(1,:),M1,M2);      
     end
-
+    
+    % Remove landmarks that lie behind the camera
+    X_C_camFrame = [R,t']*[X_C';ones(1,length(X_C))];
+    X_C = X_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
+    state.C = state.C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
+    state.F_C = state.F_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
+    state.T = state.T(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
+        
     % Move candidate landmarks with sufficient baseline to P,X
     indexesTriangulated = false(length(state.C),1);
-    for i=1:length(landmarksC)
+    for i=1:length(X_C)
         % Compute angle alpha(c)
         baseline = norm(t - pose_F(:,4));
-        dist_camera_to_landmark = norm(landmarksC(i) - pose_F(:,4)');
+        dist_camera_to_landmark = norm(X_C(i) - pose_F(:,4)');
         alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
 
         % Add triangulated keypoint if baseline large enough and remove from
         % candidates
         if abs(alpha) > params.AlphaThreshold
-            if landmarksC(i,3)>0
-                state.X = [state.X; landmarksC(i,:)];
+            if X_C(i,3)>0
+                state.X = [state.X; X_C(i,:)];
                 state.P = [state.P; state.C(i,:)];
                 state.F_P = [state.F_P; state.F_C{i}];
             end
             indexesTriangulated(i)=true;
         end
     end
-    
-    % remove landmarks that are to far away and landmarks that are behind the
-    % camera
-    distX = sqrt(sum(state.X.^2,2));
-    outlierIndixes = distX<2*mean(distX) & state.X(:,3)>0;
-    state.X = state.X(outlierIndixes, :);
-    state.P = state.P(outlierIndixes, :);
-    state.F_P = state.F_P(outlierIndixes, :);
-    
     state.C = state.C(~indexesTriangulated,:);
     state.F_C = state.F_C(~indexesTriangulated,:);
     state.T = state.T(~indexesTriangulated,:);
@@ -138,14 +145,17 @@ end
 % state.C contains new keypoint coordinates across multiple frames
 
 % Detect new keypoints with Harris
-C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
-% C_new = selectStrongest(C_new, 200);
+% C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+C_new = detectSURFFeatures(current_img,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
+    params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
+C_new = selectStrongest(C_new,500);
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts
 % Extract Harris descriptors from keypoints state.P and keypoint candidates state.C
-[descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  %% @OPTIMIZATION: save descriptors
-[descriptors_new, ~] = extractFeatures(current_img, C_new, 'BlockSize',params.BlockSizeHarris);                                  % and dont compute them each time
+% [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris); 
+[descriptors_prev, ~]   = extractFeatures(prev_img, SURFPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
+[descriptors_new, ~] = extractFeatures(current_img, C_new, 'BlockSize',params.BlockSizeHarris);                     
 
 % match newly detected candidates to keypoints and candiates from database
 indexPairs = matchFeatures(descriptors_prev,descriptors_new,'Unique',params.Unique, ...
