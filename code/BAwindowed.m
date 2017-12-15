@@ -1,8 +1,8 @@
-function [poseAdjusted,XAdjusted] = BAwindowed(windowLength,camOrientations,camLocations,cameraParams,X,F_P,pose_in)
+function [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = BAwindowed(windowLength,camOrientations,camLocations,cameraParams,X,F_P,iterations,img)
 %BUNDEADJUSMENT Summary of this function goes here
 %   Detailed explanation goes here
 
-%% hiddenState
+%% Construct hiddenState
 cameraRotations = zeros(3,3,windowLength);
 cameraTranslations = zeros(windowLength,3);
 hiddenState = [];
@@ -21,20 +21,23 @@ end
 % landmarks
 X_temp = X';
 hiddenState = [hiddenState,X_temp(:)'];
-%% obeservations
+%% Construct obeservations
 observations = [windowLength, length(X)];
 for i = 1:windowLength
     p = []; l = [];
     numObservedX = length(X);
+    % Debug plot
+%     hold off
+%     figure; hold on
     for j = 1:length(F_P)
         if size(F_P{j},1) >= i
             p = [p, flip(F_P{j}(end-i+1,:),2)];
             l = [l, j];
-%             % Debug plot
+            % Debug plot
 %             repX = worldToImage(cameraParams,cameraRotations(:,:,end),cameraTranslations(end,:),X(j,:));
-%             point = F_P{j}(end-i+1,:);
-%             scatter(repX(:,1),repX(:,2))
-%             scatter(point(:,1),point(:,2))
+%             point = F_P{j}(end-i+1,:);         
+%             scatter(repX(:,1),repX(:,2),'+','g')
+%             scatter(point(:,1),point(:,2),'+','r')
 %             drawnow();
         else
             numObservedX = numObservedX-1;
@@ -44,20 +47,35 @@ for i = 1:windowLength
     observations = [observations, observation_i];
 end
 
-options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', 10);
+%options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', iterations);
+options = optimoptions(@lsqnonlin, 'Display', 'iter');
 if false % pattern
     options.JacobPattern = pattern;
     options.UseParallel = false;
 end
-BAerror(hiddenState,observations,cameraParams,windowLength)
+
+%% Nonlinear Optimization
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, windowLength);
 hiddenStateAdjusted = lsqnonlin(errorX, cast(hiddenState,'double'), [], [], options);
 
+%% Update state
+% Extract optimized homogeneous rotations and translation 
+twistsAdjusted = reshape(hiddenStateAdjusted(1:windowLength*6)',6,[]);
+TAdjusted = zeros(4,4,windowLength);
+
 % Update optimized poses
-twistAdjusted = hiddenStateAdjusted((windowLength-1)*6+1 : windowLength*6)';
-poseAdjusted = twist2HomogMatrix(twistAdjusted);
+camOrientationsAdjusted = camOrientations;
+camLocationsAdjusted = camLocations;
+for i = 1:windowLength
+    TAdjusted(:,:,i) = twist2HomogMatrix(twistsAdjusted(:,i));
+    [OrientationAdjusted,LocationsAdjusted] = ...
+        extrinsicsToCameraPose(TAdjusted(1:3,1:3,i),TAdjusted(1:3,4,i));
+    camOrientationsAdjusted(:,:,end-windowLength+i) = OrientationAdjusted;
+    camLocationsAdjusted(end-windowLength+i,:) = LocationsAdjusted;
+end
+poseAdjusted = [camOrientationsAdjusted(:,:,end),camLocationsAdjusted(end,:)'];
 % Update optimized landmarks:
-XAdjusted = reshape(hiddenStateAdjusted(6*windowLength+1:end), 3, [])';
+XAdjusted = cast(reshape(hiddenStateAdjusted(6*windowLength+1:end), 3, [])','single');
 
 end
 

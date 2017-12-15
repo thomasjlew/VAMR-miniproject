@@ -148,7 +148,7 @@ end
 % C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
 C_new = detectSURFFeatures(current_img,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
     params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
-C_new = selectStrongest(C_new,500);
+C_new = selectStrongest(C_new,300);
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts

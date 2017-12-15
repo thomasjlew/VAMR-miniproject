@@ -1,4 +1,4 @@
-function [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,trajectory,landmarks_scatter] = initializeFigures(location_initial,orientation_inital,X_initial)
+function [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksScatterBA] = initializeFigures(location_initial,orientation_inital,X_initial)
 %INITIALIZEFIGURES Summary of this function goes here
 %   Detailed explanation goes here
 %% Intialize plots
@@ -19,7 +19,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     % set window position and size [left bottom width height]
     set(gcf, 'Position', [0, 200, 700, 600])
     axis equal
-    xlim([-70,70]); ylim([-10,20]); zlim([-10,100]);
+    xlim([-20,20]); ylim([-10,20]); zlim([-5,20]);
     % set viewpoint
     view(0, 0);
     set(gca, 'CameraUpVector', [0, 0, 1]);
@@ -28,15 +28,19 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     hold on
     legend('AutoUpdate','off');
     % plot camera
-    cameraSize = 1.5;
+    cameraSize = 1;
     plotCamera('Size', cameraSize, 'Location',...
         [0 0 0], 'Orientation', eye(3),'Color', 'k', 'Opacity', 0.5);
     cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
         'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'r', 'Opacity', 0.5);
+    camBA = plotCamera('Size', cameraSize, 'Location',location_initial, ...
+        'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'g', 'Opacity', 0.1);
     trajectory = plot3(0, 0, 0, 'r-','LineWidth',3);   
+    trajectoryBA = plot3(0, 0, 0, 'r-','LineWidth',3);   
     title('Camera trajectory');
     % plot 3D landmarks
-    landmarks_scatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 1, 'o','b'); grid on;
+    landmarksScatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 3, 'o','b'); grid on;
+    landmarksScatterBA = scatter3([], [], [], 3, 'o','g'); grid on;
     %legend('Estimated Trajectory');
 
 end

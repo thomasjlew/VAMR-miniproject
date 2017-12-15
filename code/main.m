@@ -1,12 +1,15 @@
-%% Setup
+
 clear;
 clc;
 close all;
 
+%% General Paramters
 ds = 0; % 0: KITTI, 1: Malaga, 2: parking
 live_plotting = true;
 total_frames = 100;
 BAwindow = 3;
+BAiterations = 8;
+KeyframeDist = 4
 
 %% Establish kitti dataset
 if ds == 0
@@ -226,13 +229,15 @@ frameCount = 0;
 
 %% Initialize plots
 if 1
-    [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,trajectory,landmarks_scatter] = ...
+    [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksScatterBA] = ...
         initializeFigures(location_initial,orientation_inital,X_initial);
 end
 %% Continuous operation
+% profile on
+
 range = (bootstrap_frames(2)+1):total_frames;
 IsKeyframe = false;
-profile on
+
 for i = range
     fprintf('\n Processing frame %d\n=====================', i);
     %% Load next image from dataset
@@ -259,7 +264,7 @@ for i = range
     
     %% Process next frame and store new camera pose
     % triangulate new keypoints only every 5th frame
-    if mod(i,3)==0
+    if mod(i,KeyframeDist)==0
         IsKeyframe=true;
     else
         IsKeyframe=false;
@@ -274,12 +279,12 @@ for i = range
     frameCount = cat(1,frameCount,i);
     keypointCount = cat(1,keypointCount,length(state.P));
     
-    %% Plot camera trajectory
+    %% Plot RAW trajectory
     if live_plotting
         figure(f_cameraTrajectory);
-            landmarks_scatter.XData = state.X(:,1);
-            landmarks_scatter.YData = state.X(:,2);
-            landmarks_scatter.ZData = state.X(:,3);
+            landmarksScatter.XData = state.X(:,1);
+            landmarksScatter.YData = state.X(:,2);
+            landmarksScatter.ZData = state.X(:,3);
             % plot the estimated trajectory.
             set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
             smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
@@ -294,28 +299,20 @@ for i = range
                 plot(frameCount,keypointCount,'-');
     end
     
-    if i>(BAwindow+bootstrap_frames(2)+3)
-        pose = BAwindowed(BAwindow,camOrientations,camLocations,cameraParams,state.X,state.F_P,pose);
-    end
-    
-    %% Plot camera trajectory
-    if live_plotting
+    %% Sliding Window Bundle Adjustment
+    if i>(BAwindow+bootstrap_frames(2)+3) && IsKeyframe
+        [pose,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = ...
+            BAwindowed(BAwindow,camOrientations,camLocations,cameraParams,state.X,state.F_P,BAiterations,image);
+        % Plot REFINED camera trajectory
         figure(f_cameraTrajectory);
-            landmarks_scatter.XData = state.X(:,1);
-            landmarks_scatter.YData = state.X(:,2);
-            landmarks_scatter.ZData = state.X(:,3);
-            % plot the estimated trajectory.
-            set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
-            smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-            cam.Location = camLocations(end,:);
-            cam.Orientation = camOrientations(:,:,end);
-            % plot landmarks
-            
-        figure(f_keypointScores);  
-            subplot(1,2,1);
-                plot(frameCount,scores,'-');
-            subplot(1,2,2);
-                plot(frameCount,keypointCount,'-');
+            landmarksScatter.XData = XAdjusted(:,1);
+            landmarksScatter.YData = XAdjusted(:,2);
+            landmarksScatter.ZData = XAdjusted(:,3);
+            % plot refined estimated trajectory.
+            set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
+            smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
+            camBA.Location = camLocationsAdjusted(end,:);
+            camBA.Orientation = camOrientationsAdjusted(:,:,end);
     end
 
     %% Update input varibles for next iteration
@@ -323,7 +320,7 @@ for i = range
     prev_state = state;
     
 end
-profile off
+
 %% Plot final results
 if ~live_plotting
     f_cameraTrajectory = figure('Name','3D camera trajectory');
