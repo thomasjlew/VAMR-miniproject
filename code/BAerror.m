@@ -14,7 +14,8 @@ idx = 3;
 errorX = [];
 for i = 1:nFrames
     % recover homogeneos tranformation of current frame from twist
-    T = twist2HomogMatrix(twists(:, i));
+    i
+    T = twist2HomogMatrix(twists(:, i))
     k_i = observations(idx);
     R = T(1:3,1:3);
     t = T(1:3,4);

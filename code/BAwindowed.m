@@ -47,12 +47,44 @@ for i = 1:windowLength
     observations = [observations, observation_i];
 end
 
-%options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', iterations);
-options = optimoptions(@lsqnonlin, 'Display', 'iter');
-if false % pattern
-    options.JacobPattern = pattern;
-    options.UseParallel = false;
+%% Create Jacobian Pattern for Faster Optimaization
+num_frames = cast(observations(1),'double');
+num_observations = (numel(observations)-2-num_frames)/3;
+% Factor 2, one error for each x and y direction.
+num_error_terms = 2 * num_observations;
+% Each error term will depend on one pose (6 entries) and one landmark
+% position (3 entries), so 9 nonzero entries per error term:
+pattern = spalloc(num_error_terms, numel(hiddenState), num_error_terms * 9);
+
+% Fill pattern for each frame individually:
+observation_i = 3;  % iterator into serialized observations
+error_i = 1;  % iterating frames, need another iterator for the error
+for frame_i = 1:num_frames
+    num_keypoints_in_frame = observations(observation_i);
+    % All errors of a frame are affected by its pose.
+    pattern(error_i:error_i+2*num_keypoints_in_frame-1, ...
+        (frame_i-1)*6+1:frame_i*6) = 1;
+
+    % Each error is then also affected by the corresponding landmark.
+%     landmark_indices = observations(...
+%         observation_i+2*num_keypoints_in_frame+1:...
+%         observation_i+3*num_keypoints_in_frame);
+%     for kp_i = 1:numel(landmark_indices)
+%         pattern(error_i+(kp_i-1)*2:error_i+kp_i*2-1,...
+%             1+num_frames*6+(landmark_indices(kp_i)-1)*3:...
+%             num_frames*6+landmark_indices(kp_i)*3) = 1;
+%     end
+
+    observation_i = observation_i + 1 + 3*num_keypoints_in_frame;
+    error_i = error_i + 2 * num_keypoints_in_frame;
 end
+% figure;
+% spy(pattern);
+
+% options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', iterations);
+options = optimoptions(@lsqnonlin, 'MaxIter', iterations);
+options.JacobPattern = pattern;
+options.UseParallel = false;
 
 %% Nonlinear Optimization
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, windowLength);

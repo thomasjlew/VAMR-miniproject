@@ -59,7 +59,7 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     state.T = prev_state.T(indexes_tracked,:);
     
     % add current coordinates to keypoint tracks
-    for i = 1:length(state.C)
+    for i = 1:size((state.C),1)
         state.F_C{i} = [state.F_C{i};state.C(i,:)];
     end
 end
@@ -78,16 +78,16 @@ if live_plotting
     imshow(current_img); hold on;
     scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
     scatter(state.P(inlierIdx,1), state.P(inlierIdx, 2), 15, 'g','+' );
-    for i = 1:length(state.P)
-        plot(state.F_P{i}(:,1),state.F_P{i}(:,2),'-b');
-    end
+%     for i = 1:length(state.P)
+%         plot(state.F_P{i}(:,1),state.F_P{i}(:,2),'-k');
+%     end
     hold off;
 end
 
 inlierShare = nnz(inlierIdx)/length(state.P);
 
 % Remove landmarks that lie behind the camera
-X_camFrame = [R,t']*[state.X';ones(1,length(state.X))];
+X_camFrame = [R',t']*[state.X';ones(1,length(state.X))];
 state.X = state.X(X_camFrame(3,:)>0  & X_camFrame(3,:)<50,:);
 state.P = state.P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
 state.F_P = state.F_P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
@@ -99,7 +99,7 @@ if IsKeyframe && ~isempty(state.C)
     %   if alpha is above a certain threshold add the corresponding landmark to
     %   state.X and remove the candidate
 
-    X_C = zeros(length(state.C),3);
+    X_C = zeros(size(state.C,1),3);
     for i = 1:length(state.C)
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
@@ -111,15 +111,15 @@ if IsKeyframe && ~isempty(state.C)
     end
     
     % Remove landmarks that lie behind the camera
-    X_C_camFrame = [R,t']*[X_C';ones(1,length(X_C))];
+    X_C_camFrame = [R',t']*[X_C';ones(1,size(X_C,1))];
     X_C = X_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
     state.C = state.C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
     state.F_C = state.F_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
     state.T = state.T(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
         
     % Move candidate landmarks with sufficient baseline to P,X
-    indexesTriangulated = false(length(state.C),1);
-    for i=1:length(X_C)
+    indexesTriangulated = false(size(state.C,1),1);
+    for i=1:size(X_C,1)
         % Compute angle alpha(c)
         baseline = norm(t - pose_F(:,4));
         dist_camera_to_landmark = norm(X_C(i) - pose_F(:,4)');
@@ -145,16 +145,17 @@ end
 % state.C contains new keypoint coordinates across multiple frames
 
 % Detect new keypoints with Harris
-% C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
-C_new = detectSURFFeatures(current_img,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
-    params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
-C_new = selectStrongest(C_new,300);
+C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
+% C_new = detectSURFFeatures(current_img,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
+%     params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
+% C_new = selectStrongest(C_new,params.MaxKeypoints);
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts
 % Extract Harris descriptors from keypoints state.P and keypoint candidates state.C
 % [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris); 
-[descriptors_prev, ~]   = extractFeatures(prev_img, SURFPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
+% [descriptors_prev, ~]   = extractFeatures(prev_img, SURFPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
+[descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
 [descriptors_new, ~] = extractFeatures(current_img, C_new, 'BlockSize',params.BlockSizeHarris);                     
 
 % match newly detected candidates to keypoints and candiates from database
@@ -177,7 +178,7 @@ C_new = C_new(indicesC,:);
 
 % add new keypoints to potentially future triangulated features
 state.C = [state.C; C_new.Location];
-state.F_C = [state.F_C; mat2cell(C_new.Location,ones(length(C_new.Location),1),2)]; % 1st observation of feature
+state.F_C = [state.F_C; mat2cell(C_new.Location,ones(size(C_new.Location,1),1),2)]; % 1st observation of feature
 
 % for every of N candidates write the current camera pose to state.T [(M+N)x12]
 % form row vector from (3x4) pose matrix and write it N times to sate.T
