@@ -1,13 +1,11 @@
-function [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = initializeFigures(location_initial,orientation_inital,X_initial)
+function [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = initializeFigures(location_initial,orientation_inital,X_initial)
 %INITIALIZEFIGURES Summary of this function goes here
 %   Detailed explanation goes here
 %% Intialize plots
 % plot of inlier and outlier keypoints on current images
-f_trackingP = figure('Name','Feature Tracking Keypoints');
-    set(gcf, 'Position', [800, 1000, 500, 500])
 % plot of RANSAC inlier share among all tracked keypoints
 f_keypointScores = figure('Name','Share of Inliers');
-    set(gcf, 'Position', [800, 200, 200, 400])
+    set(gcf, 'Position', [800, 150, 250, 150])
     subplot(2,1,1);
         xlabel('frame count');ylabel('share of inliers');
         title('Share of Inlier Keypoints');
@@ -25,16 +23,16 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     set(gca, 'CameraUpVector', [0, 0, 1]);
     xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
     grid on
-    hold on
     legend('AutoUpdate','off');
     % plot camera
+    hold on
     cameraSize = 1;
     plotCamera('Size', cameraSize, 'Location',...
         [0 0 0], 'Orientation', eye(3),'Color', 'k', 'Opacity', 0.5);
     cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
         'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'r', 'Opacity', 0.5);
-    camBA = plotCamera('Size', cameraSize, 'Location',location_initial, ...
-        'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'g', 'Opacity', 0.1);
+    camBA = plotCamera('Size', cameraSize, 'Location',...
+        [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0.1);
     trajectory = plot3(0, 0, 0, 'r-','LineWidth',2);   
     trajectoryBA = plot3(0, 0, 0, 'g-','LineWidth',2);   
     title('Camera trajectory');

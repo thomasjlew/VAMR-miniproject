@@ -1,4 +1,4 @@
-function errorX = BAerror(hiddenState, observations, cameraParams, nFrames)
+function errorX = BAerrorWithPlotting(hiddenState, observations, cameraParams, nFrames)
 %ERRORFUNCTION Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -32,6 +32,11 @@ for i = 1:nFrames
     % cat reporjection errors to error matrix
     errorsFrame = P'-reprojections';
     errorX = [errorX errorsFrame];
+    % Debug plot
+    figure; hold on
+    scatter(reprojections(:,1),reprojections(:,2),1*sum(abs(errorsFrame))','o','b');
+    scatter(P(:,1),P(:,2),0.5,'+','r');
+    hold off;
 
     % increase index to point at next observation Oi
     idx = idx + k_i*3 + 1;

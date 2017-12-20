@@ -6,11 +6,11 @@ close all;
 %% General Paramters
 ds = 0; % 0: KITTI, 1: Malaga, 2: parking
 live_plotting = true;
-total_frames = 150;
+total_frames = 93;
 doBA = false;
-BAwindow = 10;
-maxBAiterations = 200;
-KeyframeDist = 2;
+BAwindow = 2;
+maxBAiterations = 100;
+KeyframeDist = 1;
 
 %% Establish kitti dataset
 if ds == 0
@@ -31,7 +31,7 @@ if ds == 0
     % initialization parameters KITTI
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 15e-5, ...               
+    'MinQuality', 20e-5, ...               
     'FilterSize', 15, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
@@ -56,7 +56,7 @@ if ds == 0
     ... % Triangulation parameters
     'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 15e-5, ... % higher => less keypoints
+    'MinQuality', 20e-5, ... % higher => less keypoints
     'FilterSize', 15, ...
     ... % Matching parameters for duplicate keypoint removal
     'BlockSizeHarris', 21, ... % feature extraction parameters
@@ -81,24 +81,24 @@ elseif ds == 1
         0 0 1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[50, 54];
+    bootstrap_frames=[1, 4];
     
     % -------- Parameters MALAGA ---------
-    % initialization parameters Malaga
+    % initialization parameters MALAGA
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 25e-5, ...             
+    'MinQuality', 20e-5, ...               
     'FilterSize', 15, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
     'DistanceThreshold', 0.2, ...
     ... % KLT tracking parameters
-    'BlockSizeKLT',[21 21], ...            
+    'BlockSizeKLT',[15 15], ...            
     'MaxIterations',30, ...         
     'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',6 ...  
+    'MaxBidirectionalError',1 ...  
     );
-    % processFrame parameters Malaga
+    % processFrame parameters MALAGA
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
@@ -106,18 +106,18 @@ elseif ds == 1
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     ... % P3P parameters 
-    'MaxNumTrialsPnP',2000, ...            
-    'ConfidencePnP',98,...
-    'MaxReprojectionErrorPnP', 1, .....
+    'MaxNumTrialsPnP',1000, ...            
+    'ConfidencePnP',95,...
+    'MaxReprojectionErrorPnP', 3, ...
     ... % Triangulation parameters
-    'AlphaThreshold', 6 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
+    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 15e-5, ... % higher => less keypoints
-    'FilterSize', 11, ...
+    'MinQuality', 20e-5, ... % higher => less keypoints
+    'FilterSize', 15, ...
     ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 11, ... % feature extraction parameters
-    'MaxRatio', 0.99,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % lower  => less  
+    'BlockSizeHarris', 15, ... % feature extraction parameters
+    'MaxRatio', 1.00,... % higehr => more matches
+    'MatchThreshold', 100.0,...  % higher  => more matches  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
     'MinDistance', 9 ...
@@ -223,8 +223,10 @@ keypointCount = 0;
 frameCount = 0;
 
 %% Initialize plots
-if 1
-    [f_trackingP,f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+if live_plotting
+    f_trackingP = figure('Name','Feature Tracking Keypoints');
+        set(gcf, 'Position', [800, 1000, 500, 500])
+    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
         initializeFigures(location_initial,orientation_inital,X_initial);
 end
 %% Continuous operation
@@ -238,19 +240,13 @@ for i = range
     %% Load next image from dataset
     if ds == 0 %KITTI
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
-        figure(f_cameraTrajectory);
-        xlim([-10,40]); ylim([-10,20]); zlim([-5,40]);
     elseif ds == 1 %Malaga
         image = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(i).name]));
-        figure(f_cameraTrajectory);
-        xlim([-40,40]); ylim([-10,20]); zlim([-5,100]);
     elseif ds == 2 %Parking
         image = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
-         figure(f_cameraTrajectory);
-         xlim([-5,40]); ylim([-10,20]); zlim([-5,50]);
     else
         assert(false);
     end
@@ -264,7 +260,7 @@ for i = range
     end
     
     [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,...
-        cameraParams,f_trackingP,IsKeyframe, live_plotting);
+        cameraParams,IsKeyframe,f_trackingP,live_plotting);
     
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
@@ -275,6 +271,7 @@ for i = range
     %% Plot trajectory without BA
     if live_plotting
         figure(f_cameraTrajectory);
+            xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+50]);
             landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)'];
             landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
             landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
@@ -291,27 +288,29 @@ for i = range
         figure(f_keypointScores);  
             subplot(2,1,1);
                 plot(frameCount,scores,'-');
-                xlim([max([1,i-50]),i]);
+                xlim([max([1,i-20]),i]);
             subplot(2,1,2);
                 plot(frameCount,keypointCount,'-');
-                xlim([max([1,i-50]),i]);
+                xlim([max([1,i-20]),i]);
+                hold off;
     end
     
     %% Sliding Window Bundle Adjustment
     if doBA   
-        if i>(BAwindow+bootstrap_frames(2)) && IsKeyframe
+        if i>(BAwindow+bootstrap_frames(2)+5) && IsKeyframe
+        %if i == total_frames
             [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = ...
                 BAwindowed(BAwindow,camOrientations,camLocations,cameraParams,state.X,state.F_P,maxBAiterations,image);
     %         camLocations = camLocationsAdjusted;
     %         camOrientations = camOrientationsAdjusted;
-            pose = poseAdjusted;
+%             pose = poseAdjusted;
             state.X = XAdjusted;
             % Plot REFINED camera trajectory
             if live_plotting
                 figure(f_cameraTrajectory);
-%                     landmarksScatterBA.XData = XAdjusted(:,1);
-%                     landmarksScatterBA.YData = XAdjusted(:,2);
-%                     landmarksScatterBA.ZData = XAdjusted(:,3);
+                    landmarksScatterBA.XData = XAdjusted(:,1);
+                    landmarksScatterBA.YData = XAdjusted(:,2);
+                    landmarksScatterBA.ZData = XAdjusted(:,3);
                     % plot refined estimated trajectory.
                     set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
@@ -329,6 +328,8 @@ end
 profile off
 %% Plot final results
 if ~live_plotting
+    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+        initializeFigures(location_initial,orientation_inital,[0 0 0]);
     figure(f_cameraTrajectory);
         grid on; hold on; axis equal;
         % plot the estimated trajectory.

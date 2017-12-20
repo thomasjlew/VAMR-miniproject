@@ -3,8 +3,10 @@ function [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] =
 %   Detailed explanation goes here
 
 %% Construct hiddenState
-cameraRotations = zeros(3,3,windowLength);
-cameraTranslations = zeros(windowLength,3);
+% cameraRotations = zeros(3,3,windowLength);
+% cameraTranslations = zeros(windowLength,3);
+camOrientationsCropped = camOrientations(:,:,end-windowLength+1:end);    
+camLocationsCropped = camLocations(end-windowLength+1:end,:);
 hiddenState = [];
 
 % twists
@@ -13,8 +15,11 @@ for i = 1:windowLength
     %TODO: change order in which camera poses are saved so we dont have to
     %invert the index. Currently stored the last index (most recent) to
     %first (first pose)
-    [cameraRotations(:,:,i),cameraTranslations(i,:)] = cameraPoseToExtrinsics(camOrientations(:,:,end-windowLength+i),camLocations(end-windowLength+i,:));
-    twist = HomogMatrix2twist([cameraRotations(:,:,i),cameraTranslations(i,:)';ones(1,4)]);
+%     [cameraRotations(:,:,i),cameraTranslations(i,:)] = cameraPoseToExtrinsics(camOrientations(:,:,end-windowLength+i),camLocations(end-windowLength+i,:));
+%     twist = HomogMatrix2twist([cameraRotations(:,:,i),cameraTranslations(i,:)';ones(1,4)]);
+%     camOrientationsCropped(:,:,i) = camOrientations(:,:,end-windowLength+i);    
+%     camLocationsCropped(i,:) = camLocations(end-windowLength+i,:);
+    twist = HomogMatrix2twist([camOrientationsCropped(:,:,i),camLocationsCropped(i,:)';[0 0 0 1]]);
     hiddenState = [hiddenState,twist'];
 end   
 
@@ -66,14 +71,14 @@ for frame_i = 1:num_frames
         (frame_i-1)*6+1:frame_i*6) = 1;
 
     % Each error is then also affected by the corresponding landmark.
-%     landmark_indices = observations(...
-%         observation_i+2*num_keypoints_in_frame+1:...
-%         observation_i+3*num_keypoints_in_frame);
-%     for kp_i = 1:numel(landmark_indices)
-%         pattern(error_i+(kp_i-1)*2:error_i+kp_i*2-1,...
-%             1+num_frames*6+(landmark_indices(kp_i)-1)*3:...
-%             num_frames*6+landmark_indices(kp_i)*3) = 1;
-%     end
+    landmark_indices = observations(...
+        observation_i+2*num_keypoints_in_frame+1:...
+        observation_i+3*num_keypoints_in_frame);
+    for kp_i = 1:numel(landmark_indices)
+        pattern(error_i+(kp_i-1)*2:error_i+kp_i*2-1,...
+            1+num_frames*6+(landmark_indices(kp_i)-1)*3:...
+            num_frames*6+landmark_indices(kp_i)*3) = 1;
+    end
 
     observation_i = observation_i + 1 + 3*num_keypoints_in_frame;
     error_i = error_i + 2 * num_keypoints_in_frame;
@@ -81,14 +86,16 @@ end
 % figure;
 % spy(pattern);
 
-% options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', iterations);
+%options = optimoptions(@lsqnonlin, 'Display', 'iter', 'MaxIter', iterations);
 options = optimoptions(@lsqnonlin, 'MaxIter', iterations);
 options.JacobPattern = pattern;
 options.UseParallel = false;
 
 %% Nonlinear Optimization
+% BAerrorWithPlotting(hiddenState, observations, cameraParams, windowLength);
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, windowLength);
 hiddenStateAdjusted = lsqnonlin(errorX, cast(hiddenState,'double'), [], [], options);
+% BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, windowLength);
 
 %% Update state
 % Extract optimized homogeneous rotations and translation 
@@ -100,10 +107,8 @@ camOrientationsAdjusted = camOrientations;
 camLocationsAdjusted = camLocations;
 for i = 1:windowLength
     TAdjusted(:,:,i) = twist2HomogMatrix(twistsAdjusted(:,i));
-    [OrientationAdjusted,LocationsAdjusted] = ...
-        extrinsicsToCameraPose(TAdjusted(1:3,1:3,i),TAdjusted(1:3,4,i));
-    camOrientationsAdjusted(:,:,end-windowLength+i) = OrientationAdjusted;
-    camLocationsAdjusted(end-windowLength+i,:) = LocationsAdjusted;
+    camOrientationsAdjusted(:,:,end-windowLength+i) = TAdjusted(1:3,1:3,i);
+    camLocationsAdjusted(end-windowLength+i,:) = TAdjusted(1:3,4,i);
 end
 poseAdjusted = [camOrientationsAdjusted(:,:,end),camLocationsAdjusted(end,:)'];
 % Update optimized landmarks:

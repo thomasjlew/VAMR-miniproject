@@ -1,4 +1,4 @@
-function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,cameraParams,f_trackingP,IsKeyframe,live_plotting)
+function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,cameraParams,IsKeyframe,f_trackingP,live_plotting)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
