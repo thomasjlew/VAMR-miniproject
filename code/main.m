@@ -1,9 +1,16 @@
-%% Setup
+
 clear;
 clc;
 close all;
 
-ds = 2; % 0: KITTI, 1: Malaga, 2: parking
+%% General Paramters
+ds = 0; % 0: KITTI, 1: Malaga, 2: parking
+live_plotting = true;
+total_frames = 93;
+doBA = false;
+BAwindow = 2;
+maxBAiterations = 100;
+KeyframeDist = 1;
 
 %% Establish kitti dataset
 if ds == 0
@@ -18,13 +25,13 @@ if ds == 0
         0 0 1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[1, 4];
+    bootstrap_frames=[80, 84];
     
     % -------- Parameters KITTI ---------
     % initialization parameters KITTI
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 15e-5, ...               
+    'MinQuality', 20e-5, ...               
     'FilterSize', 15, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
@@ -49,7 +56,7 @@ if ds == 0
     ... % Triangulation parameters
     'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 15e-5, ... % higher => less keypoints
+    'MinQuality', 20e-5, ... % higher => less keypoints
     'FilterSize', 15, ...
     ... % Matching parameters for duplicate keypoint removal
     'BlockSizeHarris', 21, ... % feature extraction parameters
@@ -77,21 +84,21 @@ elseif ds == 1
     bootstrap_frames=[1, 4];
     
     % -------- Parameters MALAGA ---------
-    % initialization parameters Malaga
+    % initialization parameters MALAGA
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 25e-5, ...             
+    'MinQuality', 20e-5, ...               
     'FilterSize', 15, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
     'DistanceThreshold', 0.2, ...
     ... % KLT tracking parameters
-    'BlockSizeKLT',[21 21], ...            
+    'BlockSizeKLT',[15 15], ...            
     'MaxIterations',30, ...         
     'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',6 ...  
+    'MaxBidirectionalError',1 ...  
     );
-    % processFrame parameters Malaga
+    % processFrame parameters MALAGA
     params_continouos = struct (...
     ... % KLT parameters
     'BlockSize',[21 21], ...            
@@ -99,18 +106,18 @@ elseif ds == 1
     'NumPyramidLevels',3, ...
     'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     ... % P3P parameters 
-    'MaxNumTrialsPnP',2000, ...            
-    'ConfidencePnP',98,...
-    'MaxReprojectionErrorPnP', 1, .....
+    'MaxNumTrialsPnP',1000, ...            
+    'ConfidencePnP',95,...
+    'MaxReprojectionErrorPnP', 3, ...
     ... % Triangulation parameters
-    'AlphaThreshold', 6 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
+    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 15e-5, ... % higher => less keypoints
-    'FilterSize', 11, ...
+    'MinQuality', 20e-5, ... % higher => less keypoints
+    'FilterSize', 15, ...
     ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 11, ... % feature extraction parameters
-    'MaxRatio', 0.99,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % lower  => less  
+    'BlockSizeHarris', 15, ... % feature extraction parameters
+    'MaxRatio', 1.00,... % higehr => more matches
+    'MatchThreshold', 100.0,...  % higher  => more matches  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
     'MinDistance', 9 ...
@@ -196,62 +203,36 @@ else
     assert(false);
 end
 
+cameraParams = cameraParameters('Intrinsicmatrix',K');
+
 % initialize first set of landmarks using two-view SfM
-[P_initial,X_initial,orientation_inital,location_initial] = ...
-        initializeLandmarksHarris(img0,img1,K,params_initialization);    
+[P_initial,F_P_initial,X_initial,orientation_inital,location_initial] = ...
+        initializeLandmarksHarris(img0,img1,cameraParams,params_initialization,live_plotting);   
     
 % initialize camera poses
 camOrientations = orientation_inital;
 camLocations = location_initial;
 
 % initalize Markox state variables to start continouos operation
-prev_state = struct('P',P_initial,'X',X_initial,'C',[],'F',[],'T',[],'L',[]);
+prev_state = struct('P',P_initial,'F_P',{F_P_initial},'X',X_initial,'C',[],'F_C',{{}},'T',[]);
 prev_img = img1;
 
+% initialize other status variables
+scores = 1;
+keypointCount = 0;
+frameCount = 0;
 
-%% Intialize plots
-% plot initial set keypoints and krypoint tracks
-f_trackingP = figure('Name','Feature Tracking Keypoints');
-    set(gcf, 'Position', [800, 1000, 500, 500])
-% f_trackingC = figure('Name','Feature Tracking Keypoint Candidates');
-%     set(gcf, 'Position', [800, 0, 500, 500])
-f_keypointScores = figure('Name','Average Keypoint Score');
-    set(gcf, 'Position', [800, 200, 500, 150])
-    frameCount = 0;
-    keypointCount = 0;
-    scores = 1;
-    subplot(1,2,1);
-        xlabel('frame count');ylabel('share of inliers');
-        title('Share of Inlier Keypoints');
-    subplot(1,2,2);
-        xlabel('frame count');ylabel('number keypoint');
-        title('Number of tracked Keypoints');
-% plot inital camera pose and landmarks
-f_cameraTrajectory = figure('Name','3D camera trajectory');
-    % set window position and size [left bottom width height]
-    set(gcf, 'Position', [0, 300, 800, 500])
-    xlim([-70,70]); ylim([-10,20]); zlim([-10,100]);
-    % set viewpoint
-    view(0, 0);
-    set(gca, 'CameraUpVector', [0, 0, 1]);
-    xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
-    grid on
-    hold on
-    % plot camera
-    cameraSize = 1.5;
-    comOrigin = plotCamera('Size', cameraSize, 'Location',...
-        [0 0 0], 'Orientation', eye(3),'Color', 'r', 'Opacity', 0.2);
-    cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
-        'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'black', 'Opacity', 0.2);
-    trajectory = plot3(0, 0, 0, 'black-','LineWidth',3);   
-    title('Camera trajectory');
-    % plot 3D landmarks
-    landmarks_scatter = scatter3(X_initial(:, 1), X_initial(:, 2), X_initial(:, 3), 8, 'o','b'); grid on;
-    legend('Estimated Trajectory');
-    legend('AutoUpdate','off');
-
+%% Initialize plots
+if live_plotting
+    f_trackingP = figure('Name','Feature Tracking Keypoints');
+        set(gcf, 'Position', [800, 1000, 500, 500])
+    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+        initializeFigures(location_initial,orientation_inital,X_initial);
+end
 %% Continuous operation
-range = (bootstrap_frames(2)+1):500;
+profile on
+
+range = (bootstrap_frames(2)+1):total_frames;
 IsKeyframe = false;
 
 for i = range
@@ -259,73 +240,111 @@ for i = range
     %% Load next image from dataset
     if ds == 0 %KITTI
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
-        figure(f_cameraTrajectory);
-        xlim([-10,40]); ylim([-10,20]); zlim([-5,40]);
     elseif ds == 1 %Malaga
         image = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
             left_images(i).name]));
-        figure(f_cameraTrajectory);
-        xlim([-40,40]); ylim([-10,20]); zlim([-5,100]);
     elseif ds == 2 %Parking
         image = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
-        figure(f_cameraTrajectory);
-        xlim([-5,40]); ylim([-10,20]); zlim([-5,50]);
     else
         assert(false);
     end
     
     %% Process next frame and store new camera pose
     % triangulate new keypoints only every 5th frame
-    if mod(i,3)==0
+    if mod(i,KeyframeDist)==0
         IsKeyframe=true;
     else
         IsKeyframe=false;
     end
-    [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,K,f_trackingP,IsKeyframe);
+    
+    [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,...
+        cameraParams,IsKeyframe,f_trackingP,live_plotting);
+    
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
-
-    %% Plot camera trajectory
-    figure(f_cameraTrajectory);
-        % plot the estimated trajectory.
-        set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
-        smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-        cam.Location = camLocations(end,:);
-        cam.Orientation = camOrientations(:,:,end);
-        % plot landmarks
-        newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
-        if ~isempty(newKeypoints)
-            landmarks_scatter.XData = state.X(:,1);
-            landmarks_scatter.YData = state.X(:,2);
-            landmarks_scatter.ZData = state.X(:,3);
+    scores = cat(1,scores,inlierShare);
+    frameCount = cat(1,frameCount,i);
+    keypointCount = cat(1,keypointCount,length(state.P));
+    
+    %% Plot trajectory without BA
+    if live_plotting
+        figure(f_cameraTrajectory);
+            xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+50]);
+            landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)'];
+            landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
+            landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
+            landmarksScatter.XData = state.X(:,1);
+            landmarksScatter.YData = state.X(:,2);
+            landmarksScatter.ZData = state.X(:,3);
+            % plot the estimated trajectory.
+            set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
+            smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
+            cam.Location = camLocations(end,:);
+            cam.Orientation = camOrientations(:,:,end);
+            % plot landmarks
+            
+        figure(f_keypointScores);  
+            subplot(2,1,1);
+                plot(frameCount,scores,'-');
+                xlim([max([1,i-20]),i]);
+            subplot(2,1,2);
+                plot(frameCount,keypointCount,'-');
+                xlim([max([1,i-20]),i]);
+                hold off;
+    end
+    
+    %% Sliding Window Bundle Adjustment
+    if doBA   
+        if i>(BAwindow+bootstrap_frames(2)+5) && IsKeyframe
+        %if i == total_frames
+            [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = ...
+                BAwindowed(BAwindow,camOrientations,camLocations,cameraParams,state.X,state.F_P,maxBAiterations,image);
+    %         camLocations = camLocationsAdjusted;
+    %         camOrientations = camOrientationsAdjusted;
+%             pose = poseAdjusted;
+            state.X = XAdjusted;
+            % Plot REFINED camera trajectory
+            if live_plotting
+                figure(f_cameraTrajectory);
+                    landmarksScatterBA.XData = XAdjusted(:,1);
+                    landmarksScatterBA.YData = XAdjusted(:,2);
+                    landmarksScatterBA.ZData = XAdjusted(:,3);
+                    % plot refined estimated trajectory.
+                    set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
+                    smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
+                    camBA.Location = camLocationsAdjusted(end,:);
+                    camBA.Orientation = camOrientationsAdjusted(:,:,end);
+            end
         end
-%     figure(f_trackingC);
-%         showMatchedFeatures(prev_img,image,state.F,state.C);
-      figure(f_keypointScores);  
-        subplot(1,2,1);
-            scores = cat(1,scores,inlierShare);
-            frameCount = cat(1,frameCount,i);
-            plot(frameCount,scores,'-');
-        subplot(1,2,2);
-            keypointCount = cat(1,keypointCount,length(state.P));
-            plot(frameCount,keypointCount,'-');
+    end
 
     %% Update input varibles for next iteration
     prev_img = image;
     prev_state = state;
     
 end
-%% plot
-%     figure(f_cameraTrajectory);
-%         % plot the estimated trajectory.
-%         set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
-%         smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-%         cam.Location = camLocations(end,:);
-%         cam.Orientation = camOrientations(:,:,end);
-%         % plot landmarks
-%         newKeypoints = state.X(~ismember(state.X,prev_state.X,'rows'),:);
-%             landmarks_scatter.XData = state.X(:,1);
-%             landmarks_scatter.YData = state.X(:,2);
-%             landmarks_scatter.ZData = state.X(:,3);
+profile off
+%% Plot final results
+if ~live_plotting
+    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+        initializeFigures(location_initial,orientation_inital,[0 0 0]);
+    figure(f_cameraTrajectory);
+        grid on; hold on; axis equal;
+        % plot the estimated trajectory.
+        set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
+                smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
+        if doBA
+            set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
+                    smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
+        end
+        
+     figure(f_keypointScores);
+        subplot(2,1,1);
+            plot(frameCount,smooth(scores),'-');
+        subplot(2,1,2);
+            plot(frameCount,smooth(keypointCount),'-');
+end
+
+fprintf('\n average inlier share: %d \n', mean(scores));
