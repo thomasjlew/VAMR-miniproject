@@ -176,11 +176,70 @@ elseif ds == 2
     ... % Minimum pixel distance between new candidates and existing keypoints
     'MinDistance', 10 ...
     );
+
+%% Establish DUCKIE dataset
+elseif ds == 3
+    % Path containing the many files of Duckie dataset
+    duckie_path = '../vision_duckietown/duckiecalib';
+    assert(exist(duckie_path, 'dir') ~= 0);
+    images = dir([duckie_path ...
+        'first_total_calib_dataset']);
+    images = images(3:2:end);
+    last_frame = length(images);
+    K = [324.6754 1.4959    327.9002
+         0        343.9364  273.3951
+         0        0         1];
+    
+    % specify frame count for initialization keyframes
+    bootstrap_frames=[60, 70];
+    
+    % -------- Parameters DUCKIE ---------
+    % initialization parameters DUCKIE
+    params_initialization = struct (...
+    ...% Harris detection parameters
+    'MinQuality', 20e-5, ...               
+    'FilterSize', 15, ...
+    ... % Feature matching parameters
+    'NumTrials', 3000, ...              
+    'DistanceThreshold', 0.2, ...
+    ... % KLT tracking parameters
+    'BlockSizeKLT',[15 15], ...            
+    'MaxIterations',30, ...         
+    'NumPyramidLevels',3, ...
+    'MaxBidirectionalError',1 ...  
+    );
+    % processFrame parameters DUCKIE
+    params_continouos = struct (...
+    ... % KLT parameters
+    'BlockSize',[21 21], ...            
+    'MaxIterations',15, ...         
+    'NumPyramidLevels',3, ...
+    'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
+    ... % P3P parameters 
+    'MaxNumTrialsPnP',1000, ...            
+    'ConfidencePnP',95,...
+    'MaxReprojectionErrorPnP', 3, ...
+    ... % Triangulation parameters
+    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
+    ... % Harris paramters for canditate keypoint exraction
+    'MinQuality', 20e-5, ... % higher => less keypoints
+    'FilterSize', 15, ...
+    ... % Matching parameters for duplicate keypoint removal
+    'BlockSizeHarris', 15, ... % feature extraction parameters
+    'MaxRatio', 1.00,... % higehr => more matches
+    'MatchThreshold', 100.0,...  % higher  => more matches  
+    'Unique', false, ...
+    ... % Minimum pixel distance between new candidates and existing keypoints
+    'MinDistance', 9 ...
+    );
 else
     assert(false);
 end
 
-%% Bootstrap (Initialization)
+%% ==========================================================================
+% Bootstrapping (Initialization of Landmarks)
+%==========================================================================
+
 % load two manually selected keyframes from dataset
 if ds == 0
     img0 = imread([kitti_path '/00/image_0/' ...
@@ -199,6 +258,11 @@ elseif ds == 2
         sprintf('/images/img_%05d.png',bootstrap_frames(1))]));
     img1 = rgb2gray(imread([parking_path ...
         sprintf('/images/img_%05d.png',bootstrap_frames(2))]));
+elseif ds == 3
+    img0 = rgb2gray(imread([duckie_path ...
+        sprintf('/first_total_calib_dataset/%04d.jpg',bootstrap_frames(1))]));
+    img1 = rgb2gray(imread([duckie_path ...
+        sprintf('/first_total_calib_dataset/%04d.jpg',bootstrap_frames(2))]));
 else
     assert(false);
 end
@@ -247,6 +311,9 @@ for i = range
     elseif ds == 2 %Parking
         image = im2uint8(rgb2gray(imread([parking_path ...
             sprintf('/images/img_%05d.png',i)])));
+    elseif ds == 3 %Duckie
+        image = im2uint8(rgb2gray(imread([duckie_path ...
+            sprintf('/first_total_calib_dataset/%04d.jpg',i)])));
     else
         assert(false);
     end
@@ -289,10 +356,11 @@ for i = range
             subplot(2,1,1);
                 plot(frameCount,scores,'-');
                 xlim([max([1,i-20]),i]);
+                title('Share of Inlier Keypoints');
             subplot(2,1,2);
                 plot(frameCount,keypointCount,'-');
                 xlim([max([1,i-20]),i]);
-                hold off;
+                title('Number of tracked Keypoints');
     end
     
     %% Sliding Window Bundle Adjustment
@@ -339,11 +407,12 @@ if ~live_plotting
             set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
         end
-        
      figure(f_keypointScores);
-        subplot(2,1,1);
+        subplot(2,1,1); hold on
+            title('Share of Inlier Keypoints');
             plot(frameCount,smooth(scores),'-');
         subplot(2,1,2);
+            title('Number of tracked Keypoints');
             plot(frameCount,smooth(keypointCount),'-');
 end
 
