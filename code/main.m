@@ -3,14 +3,27 @@ clear;
 clc;
 close all;
 
-%% General Paramters
-ds = 0; % 0: KITTI, 1: Malaga, 2: parking
+%% ==========================================================================
+% General VO Paramters
+%==========================================================================
+
+ds = 0; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
 live_plotting = true;
-total_frames = 93;
-doBA = false;
-BAwindow = 2;
-maxBAiterations = 100;
-KeyframeDist = 1;
+total_frames = 170;
+KeyframeDist = 2;
+
+% BA parameters
+doBA = true;
+BA_params = struct(...
+'nKeyframes', 3, ...
+'intervalKeyframes', 5, ...
+'intervalBA', 5, ...
+'maxIterations', 150 ...
+);
+
+%%==========================================================================
+% Establish Dataset
+%==========================================================================
 
 %% Establish kitti dataset
 if ds == 0
@@ -25,14 +38,14 @@ if ds == 0
         0 0 1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[80, 84];
+    bootstrap_frames=[80, 85];
     
     % -------- Parameters KITTI ---------
     % initialization parameters KITTI
     params_initialization = struct (...
     ...% Harris detection parameters
-    'MinQuality', 20e-5, ...               
-    'FilterSize', 15, ...
+    'MinQuality', 30e-5, ...               
+    'FilterSize', 11, ...
     ... % Feature matching parameters
     'NumTrials', 3000, ...              
     'DistanceThreshold', 0.2, ...
@@ -51,12 +64,12 @@ if ds == 0
     'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
     ... % P3P parameters 
     'MaxNumTrialsPnP',1500, ...            
-    'ConfidencePnP',95,...
-    'MaxReprojectionErrorPnP', 3, ...
+    'ConfidencePnP',90,...
+    'MaxReprojectionErrorPnP', 2, ...
     ... % Triangulation parameters
     'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
     ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 20e-5, ... % higher => less keypoints
+    'MinQuality', 30e-5, ... % higher => less keypoints
     'FilterSize', 15, ...
     ... % Matching parameters for duplicate keypoint removal
     'BlockSizeHarris', 21, ... % feature extraction parameters
@@ -64,7 +77,7 @@ if ds == 0
     'MatchThreshold', 100.0,...  % higher  => more matches  
     'Unique', false, ...
     ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 6 ...
+    'MinDistance', 11 ...
     );
 
 %% Establish malaga dataset
@@ -286,22 +299,25 @@ scores = 1;
 keypointCount = 0;
 frameCount = 0;
 
-%% Initialize plots
-if live_plotting
-    f_trackingP = figure('Name','Feature Tracking Keypoints');
+%% ==========================================================================
+% Initialization Plots
+%===========================================================================
+f_trackingP = figure('Name','Feature Tracking Keypoints');
         set(gcf, 'Position', [800, 1000, 500, 500])
+if live_plotting
     [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
         initializeFigures(location_initial,orientation_inital,X_initial);
 end
-%% Continuous operation
-profile on
+
+%% ==========================================================================
+% Continuous operation
+%===========================================================================
 
 range = (bootstrap_frames(2)+1):total_frames;
-IsKeyframe = false;
-
+profile on
 for i = range
     fprintf('\n Processing frame %d\n=====================', i);
-    %% Load next image from dataset
+    % Load next image from dataset
     if ds == 0 %KITTI
         image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
     elseif ds == 1 %Malaga
@@ -325,7 +341,6 @@ for i = range
     else
         IsKeyframe=false;
     end
-    
     [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,...
         cameraParams,IsKeyframe,f_trackingP,live_plotting);
     
@@ -338,13 +353,12 @@ for i = range
     %% Plot trajectory without BA
     if live_plotting
         figure(f_cameraTrajectory);
-            xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+50]);
-            landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)'];
+            xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+40]);
+            landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
             landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
             landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
-            landmarksScatter.XData = state.X(:,1);
-            landmarksScatter.YData = state.X(:,2);
-            landmarksScatter.ZData = state.X(:,3);
+            landmarksScatter.XData = state.X(:,1); landmarksScatter.YData = state.X(:,2); landmarksScatter.ZData = state.X(:,3);
+            landmarksScatterBA.XData = []; landmarksScatterBA.YData = []; landmarksScatterBA.ZData = [];
             % plot the estimated trajectory.
             set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
             smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
@@ -364,14 +378,11 @@ for i = range
     end
     
     %% Sliding Window Bundle Adjustment
-    if doBA   
-        if i>(BAwindow+bootstrap_frames(2)+5) && IsKeyframe
-        %if i == total_frames
+    if doBA && mod(i-bootstrap_frames(2),BA_params.intervalBA)==0
+        % do bundle adjustment only after enough frames have been processed
+        if i>=(BA_params.nKeyframes*BA_params.intervalKeyframes + bootstrap_frames(2))
             [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = ...
-                BAwindowed(BAwindow,camOrientations,camLocations,cameraParams,state.X,state.F_P,maxBAiterations,image);
-    %         camLocations = camLocationsAdjusted;
-    %         camOrientations = camOrientationsAdjusted;
-%             pose = poseAdjusted;
+                BAwindowed(BA_params,camOrientations,camLocations,cameraParams,state,image);
             state.X = XAdjusted;
             % Plot REFINED camera trajectory
             if live_plotting
@@ -379,11 +390,11 @@ for i = range
                     landmarksScatterBA.XData = XAdjusted(:,1);
                     landmarksScatterBA.YData = XAdjusted(:,2);
                     landmarksScatterBA.ZData = XAdjusted(:,3);
-                    % plot refined estimated trajectory.
-                    set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
-                    smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
-                    camBA.Location = camLocationsAdjusted(end,:);
-                    camBA.Orientation = camOrientationsAdjusted(:,:,end);
+%                     % plot refined estimated trajectory.
+%                     set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
+%                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
+%                     camBA.Location = camLocationsAdjusted(end,:);
+%                     camBA.Orientation = camOrientationsAdjusted(:,:,end);
             end
         end
     end
@@ -392,8 +403,10 @@ for i = range
     prev_img = image;
     prev_state = state;
     
+   
 end
 profile off
+
 %% Plot final results
 if ~live_plotting
     [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
@@ -411,9 +424,9 @@ if ~live_plotting
         subplot(2,1,1); hold on
             title('Share of Inlier Keypoints');
             plot(frameCount,smooth(scores),'-');
-        subplot(2,1,2);
+        subplot(2,1,2); 
             title('Number of tracked Keypoints');
-            plot(frameCount,smooth(keypointCount),'-');
+            plot(frameCount,smooth(keypointCount),'-'); 
 end
 
 fprintf('\n average inlier share: %d \n', mean(scores));

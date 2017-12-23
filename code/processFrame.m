@@ -40,7 +40,7 @@ state.F_P = prev_state.F_P(indexes_tracked,:);
 
 % add current coordinates to keypoint tracks
 for i = 1:length(state.P)
-    state.F_P{i} = [state.F_P{i};state.P(i,:)];
+    state.F_P{i} = [state.P(i,:);state.F_P{i}];
 end
 
 %% step1.2: track potential keypoints in state.C
@@ -60,7 +60,7 @@ if ~isempty(prev_state.C) % Don't try to track non existent features (1st run)
     
     % add current coordinates to keypoint tracks
     for i = 1:size((state.C),1)
-        state.F_C{i} = [state.F_C{i};state.C(i,:)];
+        state.F_C{i} = [state.C(i,:);state.F_C{i}];
     end
 end
 
@@ -107,7 +107,7 @@ if IsKeyframe && ~isempty(state.C)
         M1 = cameraMatrix(cameraParams,R,t);
         M2 = cameraMatrix(cameraParams,R_F,t_F);
 
-        [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(1,:),M1,M2);      
+        [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(end,:),M1,M2);      
     end
     
     % Remove landmarks that lie behind the camera

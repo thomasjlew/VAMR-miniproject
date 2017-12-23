@@ -5,7 +5,7 @@ function [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,
 % plot of inlier and outlier keypoints on current images
 % plot of RANSAC inlier share among all tracked keypoints
 f_keypointScores = figure('Name','Share of Inliers');
-    set(gcf, 'Position', [800, 150, 250, 150])
+    set(gcf, 'Position', [800, 50, 250, 250])
     subplot(2,1,1);
         xlabel('frame count');ylabel('share of inliers');
         title('Share of Inlier Keypoints');
