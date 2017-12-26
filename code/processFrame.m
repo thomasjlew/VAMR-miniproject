@@ -39,7 +39,7 @@ state.X = prev_state.X(indexes_tracked,:);
 state.F_P = prev_state.F_P(indexes_tracked,:);
 
 % add current coordinates to keypoint tracks
-for i = 1:length(state.P)
+for i = 1:size(state.P,1)
     state.F_P{i} = [state.P(i,:);state.F_P{i}];
 end
 
@@ -88,9 +88,9 @@ inlierShare = nnz(inlierIdx)/length(state.P);
 
 % Remove landmarks that lie behind the camera
 X_camFrame = [R',t']*[state.X';ones(1,length(state.X))];
-state.X = state.X(X_camFrame(3,:)>0  & X_camFrame(3,:)<50,:);
-state.P = state.P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
-state.F_P = state.F_P(X_camFrame(3,:)>0 & X_camFrame(3,:)<50,:);
+state.X = state.X(X_camFrame(3,:)>0,:);
+state.P = state.P(X_camFrame(3,:)>0,:);
+state.F_P = state.F_P(X_camFrame(3,:)>0,:);
 
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
 
@@ -100,7 +100,7 @@ if IsKeyframe && ~isempty(state.C)
     %   state.X and remove the candidate
 
     X_C = zeros(size(state.C,1),3);
-    for i = 1:length(state.C)
+    for i = 1:size(state.C,1)
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
 
@@ -112,10 +112,10 @@ if IsKeyframe && ~isempty(state.C)
     
     % Remove landmarks that lie behind the camera
     X_C_camFrame = [R',t']*[X_C';ones(1,size(X_C,1))];
-    X_C = X_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
-    state.C = state.C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
-    state.F_C = state.F_C(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
-    state.T = state.T(X_C_camFrame(3,:)>0 & X_C_camFrame(3,:)<50,:);
+    X_C = X_C(X_C_camFrame(3,:)>0,:);
+    state.C = state.C(X_C_camFrame(3,:)>0,:);
+    state.F_C = state.F_C(X_C_camFrame(3,:)>0,:);
+    state.T = state.T(X_C_camFrame(3,:)>0,:);
         
     % Move candidate landmarks with sufficient baseline to P,X
     indexesTriangulated = false(size(state.C,1),1);
@@ -124,7 +124,6 @@ if IsKeyframe && ~isempty(state.C)
         baseline = norm(t - pose_F(:,4));
         dist_camera_to_landmark = norm(X_C(i) - pose_F(:,4)');
         alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
-
         % Add triangulated keypoint if baseline large enough and remove from
         % candidates
         if abs(alpha) > params.AlphaThreshold

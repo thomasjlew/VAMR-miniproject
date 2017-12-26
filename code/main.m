@@ -7,18 +7,18 @@ close all;
 % General VO Paramters
 %==========================================================================
 
-ds = 0; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
+ds = 3; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
 live_plotting = true;
-total_frames = 170;
-KeyframeDist = 2;
+total_frames = inf;
+KeyframeDist = 1;
 
 % BA parameters
-doBA = true;
-BA_params = struct(...
-'nKeyframes', 3, ...
-'intervalKeyframes', 5, ...
-'intervalBA', 5, ...
-'maxIterations', 150 ...
+doBA = false;
+BAparams = struct(...
+'nKeyframes', 4, ...
+'intervalKeyframes', 3, ...
+'intervalBA', 1, ...
+'maxIterations', 20 ...
 );
 
 %%==========================================================================
@@ -38,51 +38,14 @@ if ds == 0
         0 0 1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[80, 85];
+    bootstrap_frames=[78, 84];
     
-    % -------- Parameters KITTI ---------
-    % initialization parameters KITTI
-    params_initialization = struct (...
-    ...% Harris detection parameters
-    'MinQuality', 30e-5, ...               
-    'FilterSize', 11, ...
-    ... % Feature matching parameters
-    'NumTrials', 3000, ...              
-    'DistanceThreshold', 0.2, ...
-    ... % KLT tracking parameters
-    'BlockSizeKLT',[21 21], ...            
-    'MaxIterations',30, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1 ...  
-    );
-    % processFrame parameters KITTI
-    params_continouos = struct (...
-    ... % KLT parameters
-    'BlockSize',[21 21], ...            
-    'MaxIterations',15, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
-    ... % P3P parameters 
-    'MaxNumTrialsPnP',1500, ...            
-    'ConfidencePnP',90,...
-    'MaxReprojectionErrorPnP', 2, ...
-    ... % Triangulation parameters
-    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
-    ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 30e-5, ... % higher => less keypoints
-    'FilterSize', 15, ...
-    ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 21, ... % feature extraction parameters
-    'MaxRatio', 1.00,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % higher  => more matches  
-    'Unique', false, ...
-    ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 11 ...
-    );
+    % load VO parameters
+    [paramsInitialization,paramsContinuous] = loadKittiParams();
 
 %% Establish malaga dataset
 elseif ds == 1
-    % Path containing the many files of Malaga 7.
+    % Path containing the files of Malaga
     malaga_path = '../data/malaga';
     assert(exist(malaga_path, 'dir') ~= 0);
     images = dir([malaga_path ...
@@ -96,45 +59,8 @@ elseif ds == 1
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 4];
     
-    % -------- Parameters MALAGA ---------
-    % initialization parameters MALAGA
-    params_initialization = struct (...
-    ...% Harris detection parameters
-    'MinQuality', 20e-5, ...               
-    'FilterSize', 15, ...
-    ... % Feature matching parameters
-    'NumTrials', 3000, ...              
-    'DistanceThreshold', 0.2, ...
-    ... % KLT tracking parameters
-    'BlockSizeKLT',[15 15], ...            
-    'MaxIterations',30, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1 ...  
-    );
-    % processFrame parameters MALAGA
-    params_continouos = struct (...
-    ... % KLT parameters
-    'BlockSize',[21 21], ...            
-    'MaxIterations',15, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
-    ... % P3P parameters 
-    'MaxNumTrialsPnP',1000, ...            
-    'ConfidencePnP',95,...
-    'MaxReprojectionErrorPnP', 3, ...
-    ... % Triangulation parameters
-    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
-    ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 20e-5, ... % higher => less keypoints
-    'FilterSize', 15, ...
-    ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 15, ... % feature extraction parameters
-    'MaxRatio', 1.00,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % higher  => more matches  
-    'Unique', false, ...
-    ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 9 ...
-    );
+    % load VO parameters
+    [paramsInitialization,paramsContinuous] = loadMalagaParams();
 
 %% Establish parking dataset
 elseif ds == 2
@@ -150,45 +76,9 @@ elseif ds == 2
     % specify frame count for initialization keyframes
     bootstrap_frames=[1, 5];
     
-    % -------- Parameters PARKING ---------
-    % initialization parameters Parking 
-    params_initialization = struct (...
-    ...% Harris detection parameters
-    'MinQuality', 1e-5, ...             
-    'FilterSize', 11, ...
-    ... % Feature matching parameters
-    'NumTrials', 3000, ...              
-    'DistanceThreshold', 0.2, ...
-    ... % KLT tracking parameters
-    'BlockSizeKLT',[21 21], ...            
-    'MaxIterations',30, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',inf ...  
-    );
-    % processFrame parameters Parking 
-    params_continouos = struct (...
-    ... % KLT parameters
-    'BlockSize',[21 21], ...            
-    'MaxIterations',30, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
-    ... % P3P parameters 
-    'MaxNumTrialsPnP',3000, ...            
-    'ConfidencePnP',95,...
-    'MaxReprojectionErrorPnP', 3, ...
-    ... % Triangulation parameters
-    'AlphaThreshold', 8 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
-    ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 5e-5, ... % higher => less keypoints
-    'FilterSize', 15, ...
-    ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 21, ... % feature extraction parameters
-    'MaxRatio', 0.99,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % lower  => less  
-    'Unique', false, ...
-    ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 10 ...
-    );
+    % load VO parameters
+    [paramsInitialization,paramsContinuous] = loadParkingParams();
+    
 
 %% Establish DUCKIE dataset
 elseif ds == 3
@@ -196,55 +86,15 @@ elseif ds == 3
     duckie_path = '../vision_duckietown/duckiecalib';
     assert(exist(duckie_path, 'dir') ~= 0);
     images = dir([duckie_path ...
-        'first_total_calib_dataset']);
-    images = images(3:2:end);
+        '/first_total_calib_dataset']);
     last_frame = length(images);
-    K = [324.6754 1.4959    327.9002
-         0        343.9364  273.3951
-         0        0         1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[60, 70];
+    bootstrap_frames=[1, 8];
     
-    % -------- Parameters DUCKIE ---------
-    % initialization parameters DUCKIE
-    params_initialization = struct (...
-    ...% Harris detection parameters
-    'MinQuality', 20e-5, ...               
-    'FilterSize', 15, ...
-    ... % Feature matching parameters
-    'NumTrials', 3000, ...              
-    'DistanceThreshold', 0.2, ...
-    ... % KLT tracking parameters
-    'BlockSizeKLT',[15 15], ...            
-    'MaxIterations',30, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1 ...  
-    );
-    % processFrame parameters DUCKIE
-    params_continouos = struct (...
-    ... % KLT parameters
-    'BlockSize',[21 21], ...            
-    'MaxIterations',15, ...         
-    'NumPyramidLevels',3, ...
-    'MaxBidirectionalError',1,... %%% REMOVES POINTS WHEN NOT TRACKED ANYMORE (vision.PointTracker)   
-    ... % P3P parameters 
-    'MaxNumTrialsPnP',1000, ...            
-    'ConfidencePnP',95,...
-    'MaxReprojectionErrorPnP', 3, ...
-    ... % Triangulation parameters
-    'AlphaThreshold', 3 *pi/180, ...   %Min baseline angle [rad] for new landmark (alpha(c) in pdf)
-    ... % Harris paramters for canditate keypoint exraction
-    'MinQuality', 20e-5, ... % higher => less keypoints
-    'FilterSize', 15, ...
-    ... % Matching parameters for duplicate keypoint removal
-    'BlockSizeHarris', 15, ... % feature extraction parameters
-    'MaxRatio', 1.00,... % higehr => more matches
-    'MatchThreshold', 100.0,...  % higher  => more matches  
-    'Unique', false, ...
-    ... % Minimum pixel distance between new candidates and existing keypoints
-    'MinDistance', 9 ...
-    );
+     % load VO parameters
+    [paramsInitialization,paramsContinuous] = loadDuckieParams();
+    
 else
     assert(false);
 end
@@ -259,6 +109,7 @@ if ds == 0
         sprintf('%06d.png',bootstrap_frames(1))]);
     img1 = imread([kitti_path '/00/image_0/' ...
         sprintf('%06d.png',bootstrap_frames(2))]);
+    cameraParams = cameraParameters('Intrinsicmatrix',K');
 elseif ds == 1
     img0 = rgb2gray(imread([malaga_path ...
         '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
@@ -266,25 +117,29 @@ elseif ds == 1
     img1 = rgb2gray(imread([malaga_path ...
         '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
         left_images(bootstrap_frames(2)).name]));
+    cameraParams = cameraParameters('Intrinsicmatrix',K');
 elseif ds == 2
     img0 = rgb2gray(imread([parking_path ...
         sprintf('/images/img_%05d.png',bootstrap_frames(1))]));
     img1 = rgb2gray(imread([parking_path ...
         sprintf('/images/img_%05d.png',bootstrap_frames(2))]));
+    cameraParams = cameraParameters('Intrinsicmatrix',K');
 elseif ds == 3
     img0 = rgb2gray(imread([duckie_path ...
         sprintf('/first_total_calib_dataset/%04d.jpg',bootstrap_frames(1))]));
     img1 = rgb2gray(imread([duckie_path ...
         sprintf('/first_total_calib_dataset/%04d.jpg',bootstrap_frames(2))]));
+    cameraCalibrator = load([duckie_path sprintf('/cameraCalibrator.mat')]);
+    cameraParams = cameraCalibrator.cameraParams;
+    img0 = undistortImage(img0,cameraParams);
+    img1 = undistortImage(img1,cameraParams);
 else
     assert(false);
 end
 
-cameraParams = cameraParameters('Intrinsicmatrix',K');
-
 % initialize first set of landmarks using two-view SfM
 [P_initial,F_P_initial,X_initial,orientation_inital,location_initial] = ...
-        initializeLandmarksHarris(img0,img1,cameraParams,params_initialization,live_plotting);   
+        initializeLandmarksHarris(img0,img1,cameraParams,paramsInitialization,live_plotting);   
     
 % initialize camera poses
 camOrientations = orientation_inital;
@@ -313,7 +168,7 @@ end
 % Continuous operation
 %===========================================================================
 
-range = (bootstrap_frames(2)+1):total_frames;
+range = (bootstrap_frames(2)+1):(min(total_frames,last_frame));
 profile on
 for i = range
     fprintf('\n Processing frame %d\n=====================', i);
@@ -330,6 +185,7 @@ for i = range
     elseif ds == 3 %Duckie
         image = im2uint8(rgb2gray(imread([duckie_path ...
             sprintf('/first_total_calib_dataset/%04d.jpg',i)])));
+        image = undistortImage(image,cameraParams);
     else
         assert(false);
     end
@@ -341,7 +197,7 @@ for i = range
     else
         IsKeyframe=false;
     end
-    [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,params_continouos,...
+    [state,pose,inlierShare] = processFrame(prev_state,prev_img,image,paramsContinuous,...
         cameraParams,IsKeyframe,f_trackingP,live_plotting);
     
     camOrientations = cat(3,camOrientations,pose(:,1:3));
@@ -353,18 +209,18 @@ for i = range
     %% Plot trajectory without BA
     if live_plotting
         figure(f_cameraTrajectory);
+            % adjust axes to follow camera 
             xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+40]);
-            landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
-            landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
-            landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
+            % plot updated landmarks
+%             landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
+%             landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
+%             landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
             landmarksScatter.XData = state.X(:,1); landmarksScatter.YData = state.X(:,2); landmarksScatter.ZData = state.X(:,3);
-            landmarksScatterBA.XData = []; landmarksScatterBA.YData = []; landmarksScatterBA.ZData = [];
             % plot the estimated trajectory.
             set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
             smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
             cam.Location = camLocations(end,:);
             cam.Orientation = camOrientations(:,:,end);
-            % plot landmarks
             
         figure(f_keypointScores);  
             subplot(2,1,1);
@@ -378,13 +234,20 @@ for i = range
     end
     
     %% Sliding Window Bundle Adjustment
-    if doBA && mod(i-bootstrap_frames(2),BA_params.intervalBA)==0
+    if doBA && mod(i-bootstrap_frames(2),BAparams.intervalBA)==0
         % do bundle adjustment only after enough frames have been processed
-        if i>=(BA_params.nKeyframes*BA_params.intervalKeyframes + bootstrap_frames(2))
-            [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted] = ...
-                BAwindowed(BA_params,camOrientations,camLocations,cameraParams,state,image);
+        if i>=(BAparams.nKeyframes*BAparams.intervalKeyframes + bootstrap_frames(2))
+            fprintf('\n Init BA - keyframeInterval=%d, nKyframes=%d ...',...
+                BAparams.intervalKeyframes,BAparams.nKeyframes);
+            % bundle adjustment
+            [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dError] = ...
+                BAwindowed(BAparams,camOrientations,camLocations,cameraParams,state,image);
+            fprintf(' Finished BA: mean error before/after = %.2g / %.2g\n',dError(1),dError(2));
+            
+            % update landmarks
             state.X = XAdjusted;
-            % Plot REFINED camera trajectory
+            
+            % plot adjusted landmakrs
             if live_plotting
                 figure(f_cameraTrajectory);
                     landmarksScatterBA.XData = XAdjusted(:,1);
@@ -416,10 +279,6 @@ if ~live_plotting
         % plot the estimated trajectory.
         set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
                 smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-        if doBA
-            set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
-                    smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
-        end
      figure(f_keypointScores);
         subplot(2,1,1); hold on
             title('Share of Inlier Keypoints');
