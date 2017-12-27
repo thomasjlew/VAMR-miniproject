@@ -9,18 +9,20 @@ close all;
 
 ds = 0; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
 live_plotting = true;
-total_frames = 200;
+total_frames = 330;
 KeyframeDist = 1;
-b_save_GIF = true;
-filename_GIF_traj = 'traj_gif_noBA';
+b_save_GIF = true;                     % save results into a GIF
+% filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
+filename_GIF_traj = 'traj_gif_BA_330_BAparams_new';
+latest_adj_3d_pts = [];
 
-% BA parameters
-doBA = false;
+% Bundle Adjustment (BA) parameters
+doBA = true;
 BAparams = struct(...
-'nKeyframes', 4, ...
-'intervalKeyframes', 3, ...
-'intervalBA', 1, ...
-'maxIterations', 20 ...
+'nKeyframes', 5, ...        % Nb of Keyframes used for BA
+'intervalKeyframes', 3, ... % Every "intervalKeyframes", select a keyframe 
+'intervalBA', 5, ...        % Every "intervalBA" frames, a new BA is done.
+'maxIterations', 10 ...
 );
 
 %%==========================================================================
@@ -217,10 +219,13 @@ for i = range
 %             landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
 %             landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
 %             landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
-            landmarksScatter.XData = state.X(:,1); landmarksScatter.YData = state.X(:,2); landmarksScatter.ZData = state.X(:,3);
+            landmarksScatter.XData = state.X(:,1); 
+            landmarksScatter.YData = state.X(:,2); 
+            landmarksScatter.ZData = state.X(:,3);
             % plot the estimated trajectory.
-            set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
-            smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
+            set(trajectory, 'XData', smooth(camLocations(:,1)), ...
+                            'YData', smooth(camLocations(:,2)), ...
+                            'ZData', smooth(camLocations(:,3)));
             cam.Location = camLocations(end,:);
             cam.Orientation = camOrientations(:,:,end);
             
@@ -277,7 +282,7 @@ for i = range
             subplot(2,2,2);
                 plot(frameCount,keypointCount,'-');
                 xlim([max([1,i-20]),i]);
-                title('Number of tracked Keypoints');
+                title('Number of Tracked Keypoints');
             
             % Add global title
 %             figure(6)
@@ -301,30 +306,41 @@ for i = range
     end
     
     %% Sliding Window Bundle Adjustment
-    if doBA && mod(i-bootstrap_frames(2),BAparams.intervalBA)==0
+    %       &&     every "intervalBA", a new BA is performed
+    if doBA && (mod(i-bootstrap_frames(2),BAparams.intervalBA)==0)
         % do bundle adjustment only after enough frames have been processed
         if i>=(BAparams.nKeyframes*BAparams.intervalKeyframes + bootstrap_frames(2))
             fprintf('\n Init BA - keyframeInterval=%d, nKyframes=%d ...',...
                 BAparams.intervalKeyframes,BAparams.nKeyframes);
-            % bundle adjustment
-            [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dError] = ...
-                BAwindowed(BAparams,camOrientations,camLocations,cameraParams,state,image);
-            fprintf(' Finished BA: mean error before/after = %.2g / %.2g\n',dError(1),dError(2));
             
-            % update landmarks
-            state.X = XAdjusted;
+            % Do Bundle Adjustment
+            try
+                [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dError] = ...
+                    BAwindowed(BAparams,camOrientations,camLocations,cameraParams,state,image);
+                fprintf(' Finished BA: mean error before/after = %.2g / %.2g\n',dError(1),dError(2));
             
-            % plot adjusted landmakrs
-            if live_plotting
-                figure(f_cameraTrajectory);
-                    landmarksScatterBA.XData = XAdjusted(:,1);
-                    landmarksScatterBA.YData = XAdjusted(:,2);
-                    landmarksScatterBA.ZData = XAdjusted(:,3);
-%                     % plot refined estimated trajectory.
-%                     set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
-%                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
-%                     camBA.Location = camLocationsAdjusted(end,:);
-%                     camBA.Orientation = camOrientationsAdjusted(:,:,end);
+                % Update landmarks
+                state.X = XAdjusted;
+                latest_adj_3d_pts = [latest_adj_3d_pts; XAdjusted];
+                
+                % Update camera poses  
+                camLocations = camLocationsAdjusted;
+                camOrientations = camOrientationsAdjusted;
+
+                % plot adjusted landmakrs
+                if live_plotting
+                    figure(f_cameraTrajectory);
+                        landmarksScatterBA.XData = XAdjusted(:,1);
+                        landmarksScatterBA.YData = XAdjusted(:,2);
+                        landmarksScatterBA.ZData = XAdjusted(:,3);
+    %                     % plot refined estimated trajectory.
+    %                     set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
+    %                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
+    %                     camBA.Location = camLocationsAdjusted(end,:);
+    %                     camBA.Orientation = camOrientationsAdjusted(:,:,end);
+                end
+            catch
+                disp('Error in BA: share of tracked Landmarks is below threshold');
             end
         end
     end

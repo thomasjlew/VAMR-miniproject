@@ -38,9 +38,13 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     title('Camera Trajectory and Triangulated Landmarks');
     % plot 3D landmarks
     landmarksScatter = scatter3([], [], [], 5, 'o','b'); grid on;
-    landmarksHistoryScatter = scatter3(X_initial(:,2), X_initial(:,2), X_initial(:,3), 3, 'o','k','MarkerEdgeAlpha',0.2); grid on;
+    landmarksHistoryScatter = ...
+        scatter3(X_initial(:,2), X_initial(:,2), X_initial(:,3), ...
+                 3, 'o','k','MarkerEdgeAlpha',0.2); 
+    grid on;
     landmarksScatterBA = scatter3([], [], [], 5, 'o','g'); grid on;
-    %legend('Estimated Trajectory');
+    legend('Trajectory', '?','landmarksScatter', 'landmarksHistoryScatter',...
+            'landmarksScatterBA');
 
 end
 

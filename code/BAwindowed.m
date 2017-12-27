@@ -5,41 +5,66 @@ function [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dE
 
 windowLength = (params.nKeyframes-1)*params.intervalKeyframes;
 
-%% ==========================================================================
+%% ========================================================================
 % Construct hiddenState
-%===========================================================================
+%==========================================================================
 hiddenState = [];
 
-% figure; hold on
-% view(0,0);
-% plot3(smooth(camLocations(:,1)), smooth(camLocations(:,2)), smooth(camLocations(:,3)), 'r-','LineWidth',2);
-% plot3(smooth(camLocationsCropped(:,1)), smooth(camLocationsCropped(:,2)), smooth(camLocationsCropped(:,3)), 'g-','LineWidth',2);
-
-% Twists
+% -------------------------------------------------------------------------
+% Extract Twists corresponding to keyframes
+% -----------------------------------------
 % convert pose history to camera extrinsics
-camOrientationsCropped = camOrientations(:,:,(end-windowLength):params.intervalKeyframes:end);    
-camLocationsCropped = camLocations((end-windowLength):params.intervalKeyframes:end,:);
-for i = 1:params.nKeyframes
-    twist = HomogMatrix2twist([camOrientationsCropped(:,:,i),camLocationsCropped(i,:)';[0 0 0 1]]);
+                % Take 1 cam. orientation each "intervalKeyframes"
+camOrientationsCropped = camOrientations(:,:, (end-windowLength) : ...
+                                                params.intervalKeyframes : ... 
+                                                end);    
+camLocationsCropped = camLocations( (end-windowLength)        : ...
+                                     params.intervalKeyframes : ...
+                                     end                      ,     :);
+% -------------------------------------------------------------------------
+                                 
+% -------------------------------------------------------------------------
+% For each keyframe, save twist into hidden state  
+% -----------------------------------------------                               
+for i = 1:params.nKeyframes 
+    % Convert into Twist
+    twist = HomogMatrix2twist(...
+                [camOrientationsCropped(:,:,i), camLocationsCropped(i,:)'; ...
+                [0        ,    0      ,     0 ,                        1]]);
+            
+    % Save into hiddenState
     hiddenState = [hiddenState,twist'];
 end 
-% Landmarks
+% -------------------------------------------------------------------------
+
+% -------------------------------------------------------------------------
+% Save All Landmarks into Hiddenstate
+% -----------------------------------
 X_transpose = state.X';
 hiddenState = [hiddenState, X_transpose(:)'];
+% -------------------------------------------------------------------------
 
 %% ==========================================================================
-% Construct obeservations
+% Construct observations
 %===========================================================================
 observations = [];
-for i = 1:params.intervalKeyframes:(windowLength+1)
-    P = []; l = [];
+% For each Keyframe
+for frame_i = 1:params.intervalKeyframes:(windowLength+1)   % WHY "+1" ???
+    P = []; l = [];                                         % WHAT IS "l" ???
+    
+    % Nb of observed 3d landmark (which are all saved in "state.X")
+    % to check if enough landmarks to run BA (otherwise, don't run it)
     numObservedX = length(state.X);
+    
+    % For each tracked 3d pt (F_P is to 2d points accross subsequent frames
+    %                         wich correspond to this 3d pt)
     for j = 1:length(state.F_P)
-        if size(state.F_P{j},1) >= i
-            P = [P,flip(state.F_P{j}(i,:),2)];
-            l = [l, j];
+        % ?????  If track is longer that the BA windowLength ????????
+        if size(state.F_P{j},1) >= frame_i 
+            P = [P,flip(state.F_P{j}(frame_i,:),2)];    %% WHAT IS THIS? CORRECT INDEXING? NOT "(end-frame_i)"
+            l = [l, j];                                 %  OR SMTHING LIKE THAT?
         else
-            numObservedX = numObservedX-1;
+            numObservedX = numObservedX-1;         
         end
     end
     % throw error of number of observed landmarks is to low for effective BA
@@ -94,13 +119,15 @@ options.UseParallel = false;
 % Nonlinear Optimization
 % ==========================================================================
 
-% DEBUG Plot: errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
+% DEBUG Plot: 
+% errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
 errorXbefore = BAerror(hiddenState, observations, cameraParams, params.nKeyframes,image);
 
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, params.nKeyframes);
 hiddenStateAdjusted = lsqnonlin(errorX, cast(hiddenState,'double'), [], [], options);
 
-% DEBUG Plot: errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
+% DEBUG Plot: 
+% errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
 errorXafter = BAerror(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
 
 dError(1) = norm(mean(errorXbefore));
@@ -115,12 +142,22 @@ dError(2) = norm(mean(errorXafter));
 twistsAdjusted = reshape(hiddenStateAdjusted(1:params.nKeyframes*6)',6,[]);
 
 % Update optimized poses
+% SAVED IN WRONG ORDER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SAVED IN WRONG ORDER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% "i" doesn't go through all length of camOrientations, only updates 1st X ones, which may not
+% even have been taken into account!!!
+% SAVED IN WRONG ORDER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% SAVED IN WRONG ORDER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 camOrientationsAdjusted = camOrientations;
 camLocationsAdjusted = camLocations;
 for i = 1:params.nKeyframes
     TAdjusted = twist2HomogMatrix(twistsAdjusted(:,i));
-    camOrientationsAdjusted(:,:,i) = TAdjusted(1:3,1:3);
-    camLocationsAdjusted(i,:) = TAdjusted(1:3,4);
+%     camOrientationsAdjusted(:,:,i) = TAdjusted(1:3,1:3);         %%%% OLD OLD OLD (fixed now I think?)
+%     camLocationsAdjusted(i,:) = TAdjusted(1:3,4);                %%%% OLD OLD OLD (fixed now I think?)
+    camOrientationsAdjusted(:,:,(end-windowLength)+(i-1)*params.intervalKeyframes) = TAdjusted(1:3,1:3);
+    camLocationsAdjusted((end-windowLength)+(i-1)*params.intervalKeyframes,:)      = TAdjusted(1:3,4);
+%     camOrientationsAdjusted(:,:,i) = TAdjusted(1:3,1:3)';
+%     camLocationsAdjusted(i,:) = -TAdjusted(1:3,1:3)'*TAdjusted(1:3,4);
 end
 poseAdjusted = [camOrientationsAdjusted(:,:,end),camLocationsAdjusted(end,:)'];
 
