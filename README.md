@@ -1,5 +1,9 @@
 # VAMR-miniproject
 
+### BUNDLE ADJUSTEMENT (BA)
+On the left: without BA, on the right: WITH BA
+![alt text](https://github.com/m0oz/VAMR-miniproject/blob/master/ressources/traj_gif_combined.gif)<br />
+
 ## About this project
 This is the course project for VAMR
 
@@ -38,7 +42,6 @@ Monocular, visual odometry (VO) pipeline with the most essential features:
 T...
 
 ### Plots
----
 
 ### Execution time
 -- add image such as in https://github.com/thomasjlew/davis_tracker/blob/master/README.md

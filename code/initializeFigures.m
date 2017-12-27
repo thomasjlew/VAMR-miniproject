@@ -23,7 +23,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
     set(gca, 'CameraUpVector', [0, 0, 1]);
     xlabel('x-axis, in meters');ylabel('y-axis, in meters');zlabel('z-axis, in meters'); 
     grid on
-    legend('AutoUpdate','off');
+%     legend('AutoUpdate','off');
     % plot camera
     hold on
     cameraSize = 1;
@@ -35,7 +35,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
         [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0.1);
     trajectory = plot3(0, 0, 0, 'r-','LineWidth',2);   
     trajectoryBA = plot3(0, 0, 0, 'g-','LineWidth',2);   
-    title('Camera trajectory');
+    title('Camera Trajectory and Triangulated Landmarks');
     % plot 3D landmarks
     landmarksScatter = scatter3([], [], [], 5, 'o','b'); grid on;
     landmarksHistoryScatter = scatter3(X_initial(:,2), X_initial(:,2), X_initial(:,3), 3, 'o','k','MarkerEdgeAlpha',0.2); grid on;
