@@ -12,6 +12,8 @@ live_plotting = true;
 total_frames = inf;
 KeyframeDist = 1;
 
+doMetricReconstruction = false; % only implemented for Duckie dataset
+
 % BA parameters
 doBA = false;
 BAparams = struct(...
@@ -261,6 +263,11 @@ for i = range
             end
         end
     end
+    
+    %% Metric Reconstruction using checkerboard detection (Only for duckie dataset)
+    if ds==3
+       state = metricReconstruction(state,image); 
+    end
 
     %% Update input varibles for next iteration
     prev_img = image;
@@ -279,7 +286,7 @@ if ~live_plotting
         % plot the estimated trajectory.
         set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
                 smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-     figure(f_keypointScores);
+    figure(f_keypointScores);
         subplot(2,1,1); hold on
             title('Share of Inlier Keypoints');
             plot(frameCount,smooth(scores),'-');

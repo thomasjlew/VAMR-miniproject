@@ -100,13 +100,18 @@ if IsKeyframe && ~isempty(state.C)
     %   state.X and remove the candidate
 
     X_C = zeros(size(state.C,1),3);
+    
+    M1 = cameraMatrix(cameraParams,R,t);
+    R_F_prev = zeros(3,3);
+    t_F_prev = zeros(1,3);
     for i = 1:size(state.C,1)
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
-
-        M1 = cameraMatrix(cameraParams,R,t);
-        M2 = cameraMatrix(cameraParams,R_F,t_F);
-
+        if ~isequal([R_F_prev, t_F_prev'],[R_F,t_F'])
+            M2 = cameraMatrix(cameraParams,R_F,t_F);
+            R_F_prev = R_F;
+            t_F_prev = t_F;
+        end
         [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(end,:),M1,M2);      
     end
     
@@ -121,7 +126,7 @@ if IsKeyframe && ~isempty(state.C)
     indexesTriangulated = false(size(state.C,1),1);
     for i=1:size(X_C,1)
         % Compute angle alpha(c)
-        baseline = norm(t - pose_F(:,4));
+        baseline = norm(location - pose_F(:,4));
         dist_camera_to_landmark = norm(X_C(i) - pose_F(:,4)');
         alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
         % Add triangulated keypoint if baseline large enough and remove from
@@ -145,15 +150,12 @@ end
 
 % Detect new keypoints with Harris
 C_new = detectHarrisFeatures(current_img,'MinQuality',params.MinQuality,'FilterSize',params.FilterSize);
-% C_new = detectSURFFeatures(current_img,'MetricThreshold', params.MetricThreshold, 'NumOctaves', ...
-%     params.NumOctaves, 'NumScaleLevels', params.NumScaleLevels);
 % C_new = selectStrongest(C_new,params.MaxKeypoints);
+   
 n_keypoints = length(C_new);
 
 % Remove pts which are matched against currently tracked keypts
 % Extract Harris descriptors from keypoints state.P and keypoint candidates state.C
-% [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris); 
-% [descriptors_prev, ~]   = extractFeatures(prev_img, SURFPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
 [descriptors_prev, ~]   = extractFeatures(prev_img, cornerPoints([state.P;state.C]),'BlockSize',params.BlockSizeHarris);  
 [descriptors_new, ~] = extractFeatures(current_img, C_new, 'BlockSize',params.BlockSizeHarris);                     
 
@@ -174,6 +176,16 @@ for i =1:length(C_new)
     end
 end
 C_new = C_new(indicesC,:);
+
+% add new keypointcandidates for checkerboard points
+if doMetricReconstruction
+    warning('off','all');
+    [checkerPoints,boardSize]=detectCheckerboardPoints(current_img);
+    warning('on','all');
+    if ~isempty(checkerPoints)
+        C_new = [C_new; cornerPoints(checkerPoints)];
+    end
+end
 
 % add new keypoints to potentially future triangulated features
 state.C = [state.C; C_new.Location];
