@@ -14,6 +14,7 @@ KeyframeDist = 1;
 b_save_GIF = true;
 filename_GIF_traj = 'traj_gif_noBA';
 
+% Metric reconstruction by marker detection and scaling
 doMetricReconstruction = false; % only implemented for Duckie dataset
 
 % BA parameters
@@ -202,7 +203,7 @@ for i = range
         IsKeyframe=false;
     end       % v -- for plotting -- v
     [state,pose,inlierShare, inlierIdx] = processFrame(prev_state,prev_img,image,paramsContinuous,...
-        cameraParams,IsKeyframe,f_trackingP,live_plotting);
+        cameraParams,IsKeyframe,f_trackingP,live_plotting,doMetricReconstruction);
     
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
