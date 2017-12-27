@@ -196,15 +196,15 @@ for i = range
     end
     
     %% Process next frame and store new camera pose
-    % triangulate new keypoints only every 5th frame
-    if mod(i,KeyframeDist)==0
+    % triangulate new keypoints only on keyframe
+    if mod(i,intervalKeyframeLandmarks)==0
         IsKeyframe=true;
     else
         IsKeyframe=false;
-    end       % v -- for plotting -- v
+    end       
     [state,pose,inlierShare, inlierIdx] = processFrame(prev_state,prev_img,image,paramsContinuous,...
         cameraParams,IsKeyframe,f_trackingP,live_plotting,doMetricReconstruction);
-    
+    % v -- for plotting -- v
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
     scores = cat(1,scores,inlierShare);
@@ -296,9 +296,9 @@ for i = range
             img_traj   = frame2im(frame_traj);
             [imind_traj,cm] = rgb2ind(img_traj,256);
             if i == range(1)%n == 1 
-                imwrite(imind_traj,cm,filename_GIF_traj,'gif', 'Loopcount',inf); 
+                imwrite(imind_traj,cm,filename_GIF_traj,'gif', 'Loopcount',inf, 'DelayTime',0.25); 
             else 
-                imwrite(imind_traj,cm,filename_GIF_traj,'gif','WriteMode','append'); 
+                imwrite(imind_traj,cm,filename_GIF_traj,'gif','WriteMode','append','DelayTime',0.25); 
             end 
         end
     end

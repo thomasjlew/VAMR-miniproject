@@ -87,24 +87,24 @@ end
 inlierShare = nnz(inlierIdx)/length(state.P);
 
 % Remove landmarks that lie behind the camera
-X_camFrame = [R',t']*[state.X';ones(1,length(state.X))];
+X_camFrame = R'*state.X'+t';
 state.X = state.X(X_camFrame(3,:)>0,:);
 state.P = state.P(X_camFrame(3,:)>0,:);
 state.F_P = state.F_P(X_camFrame(3,:)>0,:);
 
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
-
+% trinagulate new landmarks only for keyframes
 if IsKeyframe && ~isempty(state.C)
     
-    %   if alpha is above a certain threshold add the corresponding landmark to
-    %   state.X and remove the candidate
-
     X_C = zeros(size(state.C,1),3);
+    indexesTriangulated = false(size(state.C,1),1);
     
     M1 = cameraMatrix(cameraParams,R,t);
     R_F_prev = zeros(3,3);
     t_F_prev = zeros(1,3);
+    
     for i = 1:size(state.C,1)
+        % extract pose at first observation from state.T
         pose_F = reshape(state.T(i,:),[3,4]);
         [R_F,t_F] = cameraPoseToExtrinsics(pose_F(:,1:3),pose_F(:,4));
         if ~isequal([R_F_prev, t_F_prev'],[R_F,t_F'])
@@ -112,34 +112,33 @@ if IsKeyframe && ~isempty(state.C)
             R_F_prev = R_F;
             t_F_prev = t_F;
         end
-        [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(end,:),M1,M2);      
-    end
-    
-    % Remove landmarks that lie behind the camera
-    X_C_camFrame = [R',t']*[X_C';ones(1,size(X_C,1))];
-    X_C = X_C(X_C_camFrame(3,:)>0,:);
-    state.C = state.C(X_C_camFrame(3,:)>0,:);
-    state.F_C = state.F_C(X_C_camFrame(3,:)>0,:);
-    state.T = state.T(X_C_camFrame(3,:)>0,:);
         
-    % Move candidate landmarks with sufficient baseline to P,X
-    indexesTriangulated = false(size(state.C,1),1);
-    for i=1:size(X_C,1)
-        % Compute angle alpha(c)
-        baseline = norm(location - pose_F(:,4));
-        dist_camera_to_landmark = norm(X_C(i) - pose_F(:,4)');
-        alpha = 2 * (asin((baseline/2)/dist_camera_to_landmark));
-        % Add triangulated keypoint if baseline large enough and remove from
-        % candidates
+        % triangulate landmark using pose from current and first observation
+        [X_C(i,:),~] = triangulate(state.C(i,:),state.F_C{i}(end,:),M1,M2);      
+    
+        % check if trinagulated landmark lies behind camera
+        X_C_recentCamFrame = R'*X_C(i,:)' + t';
+        
+        if X_C_recentCamFrame(3)>0
+            % Compute bearing vectors at first and most recent observations
+            X_C_firstCamFrame = R_F'*X_C(i,:)' + t_F';
+            % compute angle in radians between bearing vectors
+            alpha = atan2( norm(cross(X_C_firstCamFrame,X_C_recentCamFrame)) , ...
+                dot(X_C_firstCamFrame,X_C_recentCamFrame) ); 
+            % add triangulated landmark to state if alpha is above thrshold
         if abs(alpha) > params.AlphaThreshold
-            if X_C(i,3)>0
+                % Move candidate landmarks with sufficient baseline to P,X
                 state.X = [state.X; X_C(i,:)];
                 state.P = [state.P; state.C(i,:)];
                 state.F_P = [state.F_P; state.F_C{i}];
+                indexesTriangulated(i)=true;
             end
+        else
             indexesTriangulated(i)=true;
         end
     end
+    
+    % Remove triangulated landmarks and keypoints from candidates
     state.C = state.C(~indexesTriangulated,:);
     state.F_C = state.F_C(~indexesTriangulated,:);
     state.T = state.T(~indexesTriangulated,:);
@@ -167,7 +166,7 @@ indexPairs = matchFeatures(descriptors_prev,descriptors_new,'Unique',params.Uniq
 % C_new = removerows(C_new,'ind',indexPairs(:,2));
 idx_keep = false(length(C_new),1);
 for i=1:length(C_new)
-    if isempty(find(indexPairs(:,2)==i))
+    if isempty(find(indexPairs(:,2)==i,1))
         idx_keep(i)=true;
     end
 end
@@ -175,14 +174,14 @@ C_new = C_new(idx_keep,:);
 
 % check if new keypoints are too close to an existing keypoint
 distC = pdist2(C_new.Location,[state.P]);
-indicesC = true(length(C_new),1);
+idx_keep = true(length(C_new),1);
 for i =1:length(C_new)
-    % if any keypoint is close than 1 px discard candidate
+    % if any keypoint is close than minimum px distance discard candidate
     if min(distC(i,:))<params.MinDistance
-        indicesC(i)=false;
+        idx_keep(i)=false;
     end
 end
-C_new = C_new(indicesC,:);
+C_new = C_new(idx_keep,:);
 
 % add new keypointcandidates for checkerboard points
 if doMetricReconstruction
