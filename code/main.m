@@ -16,16 +16,12 @@ b_save_GIF = true;                     % save results into a GIF
 filename_GIF_traj = 'traj_gif_BA_330_BAparams_new';
 latest_adj_3d_pts = [];
 
-<<<<<<< HEAD
 % Bundle Adjustment (BA) parameters
-doBA = true;
-=======
 % Metric reconstruction by marker detection and scaling
 doMetricReconstruction = false; % only implemented for Duckie dataset
 
 % BA parameters
-doBA = false;
->>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
+doBA = true;
 BAparams = struct(...
 'nKeyframes', 5, ...        % Nb of Keyframes used for BA
 'intervalKeyframes', 3, ... % Every "intervalKeyframes", select a keyframe 
@@ -204,7 +200,8 @@ for i = range
     
     %% Process next frame and store new camera pose
     % triangulate new keypoints only on keyframe
-    if mod(i,intervalKeyframeLandmarks)==0
+%     if mod(i,intervalKeyframeLandmarks)==0
+    if mod(i,KeyframeDist)==0 
         IsKeyframe=true;
     else
         IsKeyframe=false;

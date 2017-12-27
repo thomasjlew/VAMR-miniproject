@@ -119,26 +119,16 @@ options.UseParallel = false;
 % Nonlinear Optimization
 % ==========================================================================
 
-<<<<<<< HEAD
 % DEBUG Plot: 
 % errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
 errorXbefore = BAerror(hiddenState, observations, cameraParams, params.nKeyframes,image);
-=======
-errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
-%errorXbefore = BAerror(hiddenState, observations, cameraParams, params.nKeyframes,image);
->>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
 
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, params.nKeyframes);
 hiddenStateAdjusted = lsqnonlin(errorX, cast(hiddenState,'double'), [], [], options);
 
-<<<<<<< HEAD
 % DEBUG Plot: 
 % errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
 errorXafter = BAerror(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
-=======
-errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
-%errorXafter = BAerror(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
->>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
 
 dError(1) = norm(mean(errorXbefore));
 dError(2) = norm(mean(errorXafter));
