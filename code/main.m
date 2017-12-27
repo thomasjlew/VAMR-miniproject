@@ -16,8 +16,16 @@ b_save_GIF = true;                     % save results into a GIF
 filename_GIF_traj = 'traj_gif_BA_330_BAparams_new';
 latest_adj_3d_pts = [];
 
+<<<<<<< HEAD
 % Bundle Adjustment (BA) parameters
 doBA = true;
+=======
+% Metric reconstruction by marker detection and scaling
+doMetricReconstruction = false; % only implemented for Duckie dataset
+
+% BA parameters
+doBA = false;
+>>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
 BAparams = struct(...
 'nKeyframes', 5, ...        % Nb of Keyframes used for BA
 'intervalKeyframes', 3, ... % Every "intervalKeyframes", select a keyframe 
@@ -195,15 +203,15 @@ for i = range
     end
     
     %% Process next frame and store new camera pose
-    % triangulate new keypoints only every 5th frame
-    if mod(i,KeyframeDist)==0
+    % triangulate new keypoints only on keyframe
+    if mod(i,intervalKeyframeLandmarks)==0
         IsKeyframe=true;
     else
         IsKeyframe=false;
-    end       % v -- for plotting -- v
+    end       
     [state,pose,inlierShare, inlierIdx] = processFrame(prev_state,prev_img,image,paramsContinuous,...
-        cameraParams,IsKeyframe,f_trackingP,live_plotting);
-    
+        cameraParams,IsKeyframe,f_trackingP,live_plotting,doMetricReconstruction);
+    % v -- for plotting -- v
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
     scores = cat(1,scores,inlierShare);
@@ -298,9 +306,9 @@ for i = range
             img_traj   = frame2im(frame_traj);
             [imind_traj,cm] = rgb2ind(img_traj,256);
             if i == range(1)%n == 1 
-                imwrite(imind_traj,cm,filename_GIF_traj,'gif', 'Loopcount',inf); 
+                imwrite(imind_traj,cm,filename_GIF_traj,'gif', 'Loopcount',inf, 'DelayTime',0.25); 
             else 
-                imwrite(imind_traj,cm,filename_GIF_traj,'gif','WriteMode','append'); 
+                imwrite(imind_traj,cm,filename_GIF_traj,'gif','WriteMode','append','DelayTime',0.25); 
             end 
         end
     end
@@ -344,6 +352,11 @@ for i = range
             end
         end
     end
+    
+    %% Metric Reconstruction using checkerboard detection (Only for duckie dataset)
+    if ds==3
+       state = metricReconstruction(state,image); 
+    end
 
     %% Update input varibles for next iteration
     prev_img = image;
@@ -362,7 +375,7 @@ if ~live_plotting
         % plot the estimated trajectory.
         set(trajectory, 'XData', smooth(camLocations(:,1)), 'YData', ...
                 smooth(camLocations(:,2)), 'ZData', smooth(camLocations(:,3)));
-     figure(f_keypointScores);
+    figure(f_keypointScores);
         subplot(2,1,1); hold on
             title('Share of Inlier Keypoints');
             plot(frameCount,smooth(scores),'-');

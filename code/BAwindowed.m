@@ -68,7 +68,7 @@ for frame_i = 1:params.intervalKeyframes:(windowLength+1)   % WHY "+1" ???
         end
     end
     % throw error of number of observed landmarks is to low for effective BA
-    assert(numObservedX/length(state.X)>=0.2, 'Error in BA: share of tracked Landmarks is below threshold');
+    % assert(numObservedX/length(state.X)>=0.2, 'Error in BA: share of tracked Landmarks is below threshold');
     observation_i = [numObservedX, P , l];
     observations = [observation_i, observations];
 end
@@ -119,20 +119,29 @@ options.UseParallel = false;
 % Nonlinear Optimization
 % ==========================================================================
 
+<<<<<<< HEAD
 % DEBUG Plot: 
 % errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
 errorXbefore = BAerror(hiddenState, observations, cameraParams, params.nKeyframes,image);
+=======
+errorXbefore = BAerrorWithPlotting(hiddenState, observations, cameraParams, params.nKeyframes,image);
+%errorXbefore = BAerror(hiddenState, observations, cameraParams, params.nKeyframes,image);
+>>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
 
 errorX = @(hiddenState) BAerror(hiddenState, observations, cameraParams, params.nKeyframes);
 hiddenStateAdjusted = lsqnonlin(errorX, cast(hiddenState,'double'), [], [], options);
 
+<<<<<<< HEAD
 % DEBUG Plot: 
 % errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
 errorXafter = BAerror(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
+=======
+errorXafter = BAerrorWithPlotting(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
+%errorXafter = BAerror(hiddenStateAdjusted, observations, cameraParams, params.nKeyframes,image);
+>>>>>>> 763f8b55d2de606b55a8744e1ce028c251a42930
 
 dError(1) = norm(mean(errorXbefore));
 dError(2) = norm(mean(errorXafter));
-
 
 %% ==========================================================================
 % Update state
