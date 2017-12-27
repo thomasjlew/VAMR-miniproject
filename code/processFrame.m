@@ -1,4 +1,4 @@
-function [state,pose,inlierShare] = processFrame(prev_state,prev_img,current_img,params,cameraParams,IsKeyframe,f_trackingP,live_plotting)
+function [state,pose,inlierShare, inlierIdx] = processFrame(prev_state,prev_img,current_img,params,cameraParams,IsKeyframe,f_trackingP,live_plotting)
 % Processes a new frame by calculating the updated camera pose as well as
 % an updated set of landmarks
 % step1: track keypoints from previous image and select the corresponding landmarks
@@ -162,7 +162,14 @@ indexPairs = matchFeatures(descriptors_prev,descriptors_new,'Unique',params.Uniq
                                 'MaxRatio',params.MaxRatio, 'MatchThreshold', params.MatchThreshold);
                             
 % remove matched keypoints: we don't want to add already tracked keypoints
-C_new = removerows(C_new,'ind',indexPairs(:,2));
+% C_new = removerows(C_new,'ind',indexPairs(:,2));
+idx_keep = false(length(C_new),1);
+for i=1:length(C_new)
+    if isempty(find(indexPairs(:,2)==i))
+        idx_keep(i)=true;
+    end
+end
+C_new = C_new(idx_keep,:);
 
 % check if new keypoints are too close to an existing keypoint
 distC = pdist2(C_new.Location,[state.P]);
