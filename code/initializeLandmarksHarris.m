@@ -8,7 +8,7 @@ function [P,F_P,X,orientation,location] = initializeLandmarksHarris(kf1,kf2,came
 % kf1: [HxW] intensity img first keyframe
 % kf2: [HxW] intensity img second keyframe
 % K: [3x3] camera matrix
-% params: struct [1x?] set of parameters for initialization algroithm
+% params: struct [1x?] set of parameters for initialization algorithm
 %       params.MinQuality
 %       params.FilterSize
 %       

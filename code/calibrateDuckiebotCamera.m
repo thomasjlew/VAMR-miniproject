@@ -4,7 +4,7 @@ function cameraParams = calibrateDuckiebotCamera ()
     
     % Parameters
     debug = true;
-    square_size = 30; % in units of 'mm' i.e 30mm
+    square_size = 31; % in units of 'mm' i.e 30mm
 
     % Define images to process for calibration
     imageFileNames = {strcat(dataset_path, ), % and so on
