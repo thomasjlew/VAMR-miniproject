@@ -9,7 +9,7 @@ title('Trajectory and Triangulated Keypoints');
     % calculate average distance of landmarks
     d =  mean(vecnorm(state.X'));
     % adjust axes to follow camera
-    xlim([camLocations(end,1)-0.6*d,camLocations(end,1)+0.6*d]); zlim([camLocations(end,3)-0.2*d,camLocations(end,3)+1.5*d]);
+    xlim([camLocations(end,1)-0.9*d,camLocations(end,1)+0.9*d]); zlim([camLocations(end,3)-0.4*d,camLocations(end,3)+1.4*d]);
     % plot updated landmarks
     % landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
     % landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];

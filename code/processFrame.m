@@ -78,10 +78,11 @@ warning(warningstate)
 inlierShare = nnz(inlierIdx)/length(state.P);
 
 % Remove landmarks that lie behind the camera
-% X_camFrame = R'*state.X'+t';
-% state.X = state.X(X_camFrame(3,:)>0,:);
-% state.P = state.P(X_camFrame(3,:)>0,:);
-% state.F_P = state.F_P(X_camFrame(3,:)>0,:);
+X_camFrame = R'*state.X'+t';
+state.X = state.X(X_camFrame(3,:)>0,:);
+state.P = state.P(X_camFrame(3,:)>0,:);
+state.F_P = state.F_P(X_camFrame(3,:)>0,:);
+inlierIdx = inlierIdx(X_camFrame(3,:)>0);
 
 %% step3: Triangulate landmark of C and evaluate bearing angle alpha
 % trinagulate new landmarks only for keyframes
