@@ -26,7 +26,7 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
 %     legend('AutoUpdate','off');
     % plot camera
     hold on
-    cameraSize = 1;
+    cameraSize = 0.5;
     plotCamera('Size', cameraSize, 'Location',...
         [0 0 0], 'Orientation', eye(3),'Color', 'k', 'Opacity', 0.3);
     cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
