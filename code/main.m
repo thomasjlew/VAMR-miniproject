@@ -156,6 +156,9 @@ camLocations = location_initial;
 % initalize Markox state variables to start continouos operation
 prev_state = struct('P',P_initial,'F_P',{F_P_initial},'X',X_initial,'C',[],'F_C',{{}},'T',[]);
 prev_img = img1;
+if doMetricReconstruction
+    prev_stateMR = struct('P',[],'X',[],'T',[],'alpha',[]);
+end
 
 % initialize other status variables
 scores = 1;
@@ -214,6 +217,15 @@ for i = range
     scores = cat(1,scores,inlierShare);
     frameCount = cat(1,frameCount,i);
     keypointCount = cat(1,keypointCount,length(state.P));
+    
+    %% Metric Reconstruction using checkerboard detection (Only for duckie dataset)
+    if doMetricReconstruction && ds==3
+       [scaledState,scaledCamLocations,stateMR] = metricReconstruction(state,camLocations,pose,...
+           prev_stateMR,prev_img,image,paramsContinuous,cameraParams);
+       state = scaledState;
+       camLocations = scaledCamLocations;
+       prev_stateMR = stateMR;
+    end
     
     %% Plot trajectory without BA
     if live_plotting
@@ -348,11 +360,6 @@ for i = range
                 disp('Error in BA: share of tracked Landmarks is below threshold');
             end
         end
-    end
-    
-    %% Metric Reconstruction using checkerboard detection (Only for duckie dataset)
-    if ds==3
-       state = metricReconstruction(state,image); 
     end
 
     %% Update input varibles for next iteration

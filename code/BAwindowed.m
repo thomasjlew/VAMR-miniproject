@@ -3,7 +3,7 @@ function [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dE
 %BUNDEADJUSMENT Summary of this function goes here
 %   Detailed explanation goes here
 
-windowLength = (params.nKeyframes-1)*params.intervalKeyframes;
+windowLength = (params.nKeyframes-1)*params.intervalKeyframes+1;
 
 %% ========================================================================
 % Construct hiddenState
@@ -15,10 +15,10 @@ hiddenState = [];
 % -----------------------------------------
 % convert pose history to camera extrinsics
                 % Take 1 cam. orientation each "intervalKeyframes"
-camOrientationsCropped = camOrientations(:,:, (end-windowLength) : ...
+camOrientationsCropped = camOrientations(:,:, (end-windowLength+1) : ...
                                                 params.intervalKeyframes : ... 
                                                 end);    
-camLocationsCropped = camLocations( (end-windowLength)        : ...
+camLocationsCropped = camLocations( (end-windowLength+1)        : ...
                                      params.intervalKeyframes : ...
                                      end                      ,     :);
 % -------------------------------------------------------------------------
@@ -48,28 +48,33 @@ hiddenState = [hiddenState, X_transpose(:)'];
 % Construct observations
 %===========================================================================
 observations = [];
-% For each Keyframe
-for frame_i = 1:params.intervalKeyframes:(windowLength+1)   % WHY "+1" ???
-    P = []; l = [];                                         % WHAT IS "l" ???
+% For each Keyframe (starting with the most recent) construct 
+%   P - keypoints in this frame
+%   l - indexes of the landmarks corresponding to the keypoints
+for frame_i = 1:params.intervalKeyframes:windowLength
+    P = []; l = [];
     
-    % Nb of observed 3d landmark (which are all saved in "state.X")
+    % Number of observed 3d landmark (which are all saved in "state.X")
     % to check if enough landmarks to run BA (otherwise, don't run it)
     numObservedX = length(state.X);
     
-    % For each tracked 3d pt (F_P is to 2d points accross subsequent frames
-    %                         wich correspond to this 3d pt)
+    % For each keypoint track F_P{j} extract observation in frame_i
     for j = 1:length(state.F_P)
-        % ?????  If track is longer that the BA windowLength ????????
+        % Append keypoint to P only if keypoint was tracked in frame_i
+        % e.g. keypoint track reaches back as long as frame_i
         if size(state.F_P{j},1) >= frame_i 
-            P = [P,flip(state.F_P{j}(frame_i,:),2)];    %% WHAT IS THIS? CORRECT INDEXING? NOT "(end-frame_i)"
-            l = [l, j];                                 %  OR SMTHING LIKE THAT?
+            P_i = state.F_P{j}(frame_i,:);
+            P = [P,flip(P_i,2)]; % flip P to get (row,col) instead of (x,y)
+            l = [l, j]; % the index for the corresponding landmark to F_P{j} is simply j                       
         else
+            % reduce number of observed landmarks if keypoint
+            % track does not reach back to frame_i
             numObservedX = numObservedX-1;         
         end
     end
-    % throw error of number of observed landmarks is to low for effective BA
-    % assert(numObservedX/length(state.X)>=0.2, 'Error in BA: share of tracked Landmarks is below threshold');
     observation_i = [numObservedX, P , l];
+    % append observation_i to the left as we started with the 
+    % most recent frame and go backwards
     observations = [observation_i, observations];
 end
 observations = [params.nKeyframes, length(state.X), observations];
