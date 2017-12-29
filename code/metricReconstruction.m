@@ -1,41 +1,87 @@
-function [scaledState,scaledCamLocations,stateMR] = metricReconstruction(state,camLocations,pose,prev_stateMR,prev_img,image,params,cameraParams)
+function [scaledState,scaledCamLocations,scalingFactor,stateMR] = metricReconstruction(state,camLocations,pose,prev_stateMR,prev_img,image,params,cameraParams)
 %METRIC_RECONSTRUCTION
 %   This function will scan the dataset for markers (checkerBoards). Given
 %   the ground truth metric dimension of the marker it will scale the scene
-%   accordingly to align the scale to ground truth
+%   accordingly to align the scale to ground truth. 
 %   
-
-%% reference distance of checkerboard corners
-actualDistance = 0.2;
-edgeLengths = 2;
-[x,y] = meshgrid(0:actualDistance:edgeLengths*actualDistance,0:actualDistance:edgeLengths*actualDistance);
-refDistance = mean(pdist(x+y));
+%   state: [1x6] struct array containing state of prev_frame
+%       state.P: [Nx2] keypoints
+%       state.F_P: [Nx1] cell array containing tracks of keypoints
+%       state.X: [Nx3] landmarks ordered corresponding to keypoints
+%       state.C: [Mx2] candidate keypoints to be evaluated
+%       state.F_C: [Mx2] tracks for candidate keypoints
+%       state.T: [Mx12] camera poses at first observation of keypoints
+%   camLocations: [frameCountx3] array containing the camera locations in
+%   each frame
+%   pose: [3x4] current camera pose
+%   prev_stateMR: [1x5] struct array containing the state of Metric
+%   Reconstruction
+%       stateMR.P: [9x2] tracked checkerBoard keypoints
+%       stateMR.X: [9x3} landmarks corresponding to currently tracked
+%       checkerBoard
+%       stateMR.F: [9x2] first observation of tracked keypoints
+%       stateMR.T:  [9x12] poses of camera at first observation of P
+%       stateMR.alpha: [9x1] array containing the most recent angles of X
+%
+% This funtion has three different modes of operation
+% SEARCH CHECKERBOARD: If no checkerBoard is currently tracked the function
+%   will try to detect any visible checkerboard and add cornerPoints to the
+%   current keypoints
+% TRACK CHECKERBOARD: As soon as there is a checkerBoard detected the
+%   function will stop scanning for new checkerboards and will track the
+%   current checkerBoard until the bearing angles alpha reach a certain
+%   threshold
+% RECONSTRUCT SCENE: If now all bearing angles alpha are above the given
+%   threshold the function will use the triangulated landmarks to re-scale
+%   the scene. Then all points and landmarks are removed and the function
+%   switches back to searchCheckerBoard
 
 stateMR = prev_stateMR;
 
-rectifyScene = false;
+%% Define reference distance of checkerboard corners
+cornerDist = 0.2; % ground truth distance between two neighboring corners in [m]
+nCorners = 9;
+nEdges = sqrt(nCorners)-1;
+[x,y] = meshgrid(0:cornerDist:nEdges*cornerDist,0:cornerDist:nEdges*cornerDist);
+% calculate the mean of all pairwise distances between the checkerboard corners
+% this is a robust measure for the scale of the checkerboard and will
+% remain the same even if the corners are saved in a different order
+refDistance = mean(pdist(x+y));
+
+%% Intialize mode of operation (see detailed explanation in function head)
 searchCheckerBoard = false;
 trackCheckerBoard = false;
+reconstructScene = false;
 
+%% Set output variables for the case that no rectification is performed
+scaledState = state;
+scaledCamLocations = camLocations;
+scalingFactor = 1;
+
+%% Operation Mode: SCENE RECONSTRUCTION
+% check if the past checkerboardvlandmarks can be triangulated with
+% sufficient accuracy by checking their bearing angles alpha
 if mean(stateMR.alpha)>params.AlphaThreshold
-    rectifyScene = true;
-else
-    scaledState = state;
-    scaledCamLocations = camLocations;
+    reconstructScene = true;
 end
 
-if rectifyScene
-    %% Scale 3D scene 
+if reconstructScene
     figure(6);
     imshow(image); hold on
     scatter(stateMR.P(:,1), stateMR.P(:, 2), 15, 'g','+' ); hold off
     figure(7);
     scatter3(stateMR.X(:,1),stateMR.X(:,2), stateMR.X(:, 3), 15, 'g','o' );
     
+    % calculate the mean of all pairwise distances between the 9
+    % checkerboard landmarks
     measuredDistance = mean(pdist(state.X));
     
-    if size(stateMR.X,1)==9
-        scalingFactor = refDistance/measuredDistance
+    % re-scale scene only if the number of cornes is correct. Otherwise
+    % discard landmarks and keypoints and return state without scaling
+    % this is to prevent any falsely detected patterns
+    if size(stateMR.X,1)==nCorners
+        % re-scale landmarks and cam trajectory to fit ground truth
+        scalingFactor = refDistance/measuredDistance;
         scaledState = state;
         scaledState.X = state.X * scalingFactor;
         scaledCamLocations = camLocations * scalingFactor;
@@ -43,6 +89,8 @@ if rectifyScene
         scaledState = state;
     end
     
+    % discard the tracked checkerBoard points and landmarks to initiate the
+    % next cycle of searching, tracking and scaling
     stateMR.P = [];
     stateMR.F = [];
     stateMR.T = [];
@@ -50,14 +98,18 @@ if rectifyScene
     stateMR.alpha = 0;
 end
 
+%% Determine if there is a checkerBoard currently tracked
+% if no scan image for new checkerBoard
 if isempty(stateMR.P)
     searchCheckerBoard = true;
+% if yes track the checker corners and triangulate landmarks
 else
     trackCheckerBoard = true;
 end
 
+%% Operation Mode: SEARCH CHECKERBOARD
+% scan images for checkerboard and add new keypoint candidates if checkerBoard is detected
 if searchCheckerBoard
-    %% Add new keypoint candidates if checkerBoard is detected
     warning('off','all');
     [checkerPoints,~]=detectCheckerboardPoints(image);
     warning('on','all');
@@ -72,13 +124,13 @@ if searchCheckerBoard
     end
 end
 
+%% Operation Mode: TRACK CHECKERBOARD
 if trackCheckerBoard
-    %% Track checkerBoard points
     pointTracker = vision.PointTracker('BlockSize',params.BlockSize,'MaxIterations',params.MaxIterations, ...
     'NumPyramidLevels',params.NumPyramidLevels,'MaxBidirectionalError',params.MaxBidirectionalError);
     
-    initialize(pointTracker,stateMR.P,prev_img);
     % use KLT point tracker to track cornerPoints from previous frame
+    initialize(pointTracker,stateMR.P,prev_img);
     [trackedCornerPoints,indexes_tracked] = step(pointTracker,image);
     stateMR.P = trackedCornerPoints(indexes_tracked,:);
     release(pointTracker);
@@ -87,6 +139,8 @@ if trackCheckerBoard
     imshow(image); hold on;
     scatter(stateMR.P(:,1), stateMR.P(:, 2), 15, 'r','+' );
     
+    % triangulate landmarks using the first and the most recent
+    % observation, then calculate alpha for each of the cornerPoints
     for i = 1:size(stateMR.P,1)
         pose_F = reshape(stateMR.T(i,:),[3,4]); % extract pose at first observation from stateMR.T
         [R,t] = cameraPoseToExtrinsics(pose(:,1:3),pose(:,4));

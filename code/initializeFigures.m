@@ -1,4 +1,4 @@
-function [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = initializeFigures(location_initial,orientation_inital,X_initial)
+function [f_keypointScores,f_cameraTrajectory,cam,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = initializeFigures(location_initial,orientation_inital,X_initial)
 %INITIALIZEFIGURES Summary of this function goes here
 %   Detailed explanation goes here
 %% Intialize plots
@@ -26,19 +26,15 @@ f_cameraTrajectory = figure('Name','3D camera trajectory');
 %     legend('AutoUpdate','off');
     % plot camera
     hold on
-    cameraSize = 0.5;
-    plotCamera('Size', cameraSize, 'Location',...
-        [0 0 0], 'Orientation', eye(3),'Color', 'k', 'Opacity', 0.3);
+    cameraSize = 1;
     cam = plotCamera('Size', cameraSize, 'Location',location_initial, ...
         'Label','Current Pose', 'Orientation', orientation_inital,'Color', 'r', 'Opacity', 0.5);
-    camBA = plotCamera('Size', cameraSize, 'Location',...
-        [0 0 0], 'Orientation', eye(3),'Color', 'g', 'Opacity', 0.1);
     trajectory = plot3(0, 0, 0, 'r-','LineWidth',2);   
     trajectoryBA = plot3(0, 0, 0, 'g-','LineWidth',2);   
     title('Camera Trajectory and Triangulated Landmarks');
     % plot 3D landmarks
     landmarksScatter = scatter3([], [], [], 5, 'o','b'); grid on;
-    landmarksHistoryScatter = scatter3([], [], [], 3, 'o','k','MarkerEdgeAlpha',0.2); 
+    landmarksHistoryScatter = scatter3([], [], [], 2, 'o','k','MarkerEdgeAlpha',0.1); 
 %     landmarksHistoryScatter = scatter3(X_initial(:,2), X_initial(:,2), X_initial(:,3), ...
 %                  3, 'o','k','MarkerEdgeAlpha',0.2); 
     grid on;

@@ -166,12 +166,13 @@ keypointCount = 0;
 frameCount = 0;
 
 %% ==========================================================================
-% Initialization Plots
+% Initialization Figures
 %===========================================================================
 f_trackingP = figure('Name','Feature Tracking Keypoints');
         set(gcf, 'Position', [800, 1000, 500, 500])
 if live_plotting
-    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+    [f_keypointScores,f_cameraTrajectory,cam,trajectory,trajectoryBA,...
+        landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
         initializeFigures(location_initial,orientation_inital,X_initial);
 end
 
@@ -181,21 +182,21 @@ end
 
 range = (bootstrap_frames(2)+1):(min(total_frames,last_frame));
 profile on
-for i = range
-    fprintf('\n Processing frame %d\n=====================', i);
+for frameCount = range
+    fprintf('\n Processing frame %d\n=====================', frameCount);
     % Load next image from dataset
     if ds == 0 %KITTI
-        image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',i)]);
+        image = imread([kitti_path '/00/image_0/' sprintf('%06d.png',frameCount)]);
     elseif ds == 1 %Malaga
         image = rgb2gray(imread([malaga_path ...
             '/malaga-urban-dataset-extract-07_rectified_800x600_Images/' ...
-            left_images(i).name]));
+            left_images(frameCount).name]));
     elseif ds == 2 %Parking
         image = im2uint8(rgb2gray(imread([parking_path ...
-            sprintf('/images/img_%05d.png',i)])));
+            sprintf('/images/img_%05d.png',frameCount)])));
     elseif ds == 3 %Duckie
         image = im2uint8(rgb2gray(imread([duckie_path ...
-            sprintf('/first_total_calib_dataset/%04d.jpg',i)])));
+            sprintf('/first_total_calib_dataset/%04d.jpg',frameCount)])));
         image = undistortImage(image,cameraParams);
     else
         assert(false);
@@ -203,57 +204,56 @@ for i = range
     
     %% Process next frame and store new camera pose
     % triangulate new keypoints only on keyframe
-%     if mod(i,intervalKeyframeLandmarks)==0
-    if mod(i,KeyframeDist)==0 
+    if mod(frameCount,intervalKeyframeTriangulation)==0 
         IsKeyframe=true;
     else
         IsKeyframe=false;
     end       
-    [state,pose,inlierShare, inlierIdx] = processFrame(prev_state,prev_img,image,paramsContinuous,...
-        cameraParams,IsKeyframe,f_trackingP,live_plotting,doMetricReconstruction);
+    [state,pose,inlierShare,inlierIdx] = processFrame(prev_state,prev_img,image,paramsContinuous,...
+        cameraParams,IsKeyframe);
     % v -- for plotting -- v
     camOrientations = cat(3,camOrientations,pose(:,1:3));
     camLocations = cat(1,camLocations,pose(:,4)');
     scores = cat(1,scores,inlierShare);
-    frameCount = cat(1,frameCount,i);
     keypointCount = cat(1,keypointCount,length(state.P));
     
     %% Metric Reconstruction using checkerboard detection (Only for duckie dataset)
     if doMetricReconstruction && ds==3
-       [scaledState,scaledCamLocations,stateMR] = metricReconstruction(state,camLocations,pose,...
+       [scaledState,scaledCamLocations,scalingFactor,stateMR] = metricReconstruction(state,camLocations,pose,...
            prev_stateMR,prev_img,image,paramsContinuous,cameraParams);
        state = scaledState;
        camLocations = scaledCamLocations;
+       cam.Size = cam.Size * scalingFactor;
        prev_stateMR = stateMR;
     end
     
-    %% Plot trajectory without BA
+    %% Plot trajectory
     if live_plotting
-        plotTrajectory(f_cameraTrajectory,camLocations,camOrientations,state,...
-            b_save_GIF,landmarksScatter,trajectory,filename_GIF_traj,range)
+        plotTrajectory(f_cameraTrajectory,f_trackingP,camOrientations,camLocations,...
+            state,image,landmarksScatter,cam,trajectory,b_save_GIF,filename_GIF_traj,...
+            keypointCount,inlierIdx,frameCount,range)
             
         figure(f_keypointScores);  
             subplot(2,1,1);
-                plot(frameCount,scores,'-');
-                xlim([max([1,i-20]),i]);
+                plot(range(1)-1:frameCount,scores,'-');
+                xlim([max([1,frameCount-20]),frameCount]);
                 title('Share of Inlier Keypoints');
             subplot(2,1,2);
-                plot(frameCount,keypointCount,'-');
-                xlim([max([1,i-20]),i]);
+                plot(range(1)-1:frameCount,keypointCount,'-');
+                xlim([max([1,frameCount-20]),frameCount]);
                 title('Number of tracked Keypoints');
-                
         drawnow;
     end
     
     %% Sliding Window Bundle Adjustment
     %       &&     every "intervalBA", a new BA is performed
-    if doBA && (mod(i-bootstrap_frames(2),BAparams.intervalBA)==0)
+    if doBA && (mod(frameCount-bootstrap_frames(2),BAparams.intervalBA)==0)
         % do bundle adjustment only after enough frames have been processed
-        if i>=(BAparams.nKeyframes*BAparams.intervalKeyframes + bootstrap_frames(2))
+        if frameCount>=(BAparams.nKeyframes*BAparams.intervalKeyframes + bootstrap_frames(2))
             fprintf('\n Init BA - keyframeInterval=%d, nKyframes=%d ...',...
                 BAparams.intervalKeyframes,BAparams.nKeyframes);
             
-            % Do Bundle Adjustment
+            % Bundle Adjustment
             try
                 [poseAdjusted,camOrientationsAdjusted,camLocationsAdjusted,XAdjusted,dError] = ...
                     BAwindowed(BAparams,camOrientations,camLocations,cameraParams,state,image);
@@ -261,7 +261,7 @@ for i = range
             
                 % Update landmarks
                 state.X = XAdjusted;
-                latest_adj_3d_pts = [latest_adj_3d_pts; XAdjusted];
+                %latest_adj_3d_pts = [latest_adj_3d_pts; XAdjusted];
                 
                 % Update camera poses  
                 camLocations = camLocationsAdjusted;
@@ -270,14 +270,9 @@ for i = range
                 % plot adjusted landmakrs
                 if live_plotting
                     figure(f_cameraTrajectory);
-                        landmarksScatterBA.XData = XAdjusted(:,1);
-                        landmarksScatterBA.YData = XAdjusted(:,2);
-                        landmarksScatterBA.ZData = XAdjusted(:,3);
-    %                     % plot refined estimated trajectory.
-    %                     set(trajectoryBA, 'XData', smooth(camLocationsAdjusted(:,1)), 'YData', ...
-    %                     smooth(camLocationsAdjusted(:,2)), 'ZData', smooth(camLocationsAdjusted(:,3)));
-    %                     camBA.Location = camLocationsAdjusted(end,:);
-    %                     camBA.Orientation = camOrientationsAdjusted(:,:,end);
+                    landmarksScatterBA.XData = XAdjusted(:,1);
+                    landmarksScatterBA.YData = XAdjusted(:,2);
+                    landmarksScatterBA.ZData = XAdjusted(:,3);
                 end
             catch
                 disp('Error in BA: share of tracked Landmarks is below threshold');
@@ -311,4 +306,4 @@ if ~live_plotting
             plot(frameCount,smooth(keypointCount),'-'); 
 end
 
-fprintf('\n average inlier share: %d \n', mean(scores));
+fprintf('\n Completed. average inlier share: %d \n', mean(scores));
