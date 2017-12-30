@@ -180,8 +180,8 @@ end
 % Continuous operation
 %===========================================================================
 
-range = (bootstrap_frames(2)+1):(min(total_frames,last_frame));
-profile on
+range = (bootstrap_frames(2)+1):(min(bootstrap_frames(2)+n_frames,last_frame));
+% profile on
 for frameCount = range
     fprintf('\n Processing frame %d\n=====================', frameCount);
     % Load next image from dataset
@@ -230,8 +230,8 @@ for frameCount = range
     %% Plot trajectory
     if live_plotting
         plotTrajectory(f_cameraTrajectory,f_trackingP,camOrientations,camLocations,...
-            state,image,landmarksScatter,cam,trajectory,b_save_GIF,filename_GIF_traj,...
-            keypointCount,inlierIdx,frameCount,range)
+            state,image,landmarksScatter,landmarksHistoryScatter,cam,trajectory,b_save_GIF,...
+            filename_GIF_traj,keypointCount,inlierIdx,frameCount,range)
             
         figure(f_keypointScores);  
             subplot(2,1,1);
@@ -300,10 +300,10 @@ if ~live_plotting
     figure(f_keypointScores);
         subplot(2,1,1); hold on
             title('Share of Inlier Keypoints');
-            plot(frameCount,smooth(scores),'-');
+            plot((range(1)-1):frameCount,smooth(scores),'-');
         subplot(2,1,2); 
             title('Number of tracked Keypoints');
-            plot(frameCount,smooth(keypointCount),'-'); 
+            plot((range(1)-1):frameCount,smooth(keypointCount),'-'); 
 end
 
 fprintf('\n Completed. average inlier share: %d \n', mean(scores));

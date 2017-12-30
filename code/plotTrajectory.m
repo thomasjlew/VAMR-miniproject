@@ -1,6 +1,6 @@
 function [] = plotTrajectory(f_cameraTrajectory,f_trackingP,camOrientations,camLocations,...
-            state,image,landmarksScatter,cam,trajectory,b_save_GIF,filename_GIF_traj,...
-            keypointCount,inlierIdx,frameCount,range)
+            state,image,landmarksScatter,landmarksHistoryScatter,cam,trajectory,...
+            b_save_GIF,filename_GIF_traj,keypointCount,inlierIdx,frameCount,range)
 %PLOTTRAJECTORY Summary of this function goes here
 %   Detailed explanation goes here
 
@@ -11,9 +11,9 @@ title('Trajectory and Triangulated Keypoints');
     % adjust axes to follow camera
     xlim([camLocations(end,1)-0.9*d,camLocations(end,1)+0.9*d]); zlim([camLocations(end,3)-0.4*d,camLocations(end,3)+1.4*d]);
     % plot updated landmarks
-    % landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
-    % landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
-    % landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
+    landmarksHistoryScatter.XData = [landmarksHistoryScatter.XData state.X(:,1)']; 
+    landmarksHistoryScatter.YData = [landmarksHistoryScatter.YData state.X(:,2)'];
+    landmarksHistoryScatter.ZData = [landmarksHistoryScatter.ZData state.X(:,3)'];
     landmarksScatter.XData = state.X(:,1); 
     landmarksScatter.YData = state.X(:,2); 
     landmarksScatter.ZData = state.X(:,3);
@@ -23,7 +23,8 @@ title('Trajectory and Triangulated Keypoints');
                     'ZData', smooth(camLocations(:,3)));
     cam.Location = camLocations(end,:);
     cam.Orientation = camOrientations(:,:,end);
-
+    drawnow
+    
 figure(f_trackingP);
     imshow(image); hold on;
     scatter(state.P(~inlierIdx,1), state.P(~inlierIdx, 2), 15, 'r','+' );
@@ -51,7 +52,7 @@ if b_save_GIF
     % end
 
     % adjust axes to follow camera 
-    xlim([camLocations(end,1)-20,camLocations(end,1)+20]); zlim([camLocations(end,3)-15,camLocations(end,3)+40]);
+    xlim([camLocations(end,1)-0.6*d,camLocations(end,1)+0.6*d]); zlim([camLocations(end,3)-0.5*d,camLocations(end,3)+1*d]);
     landmarksScatter.XData = state.X(:,1); 
     landmarksScatter.YData = state.X(:,2); 
     landmarksScatter.ZData = state.X(:,3);

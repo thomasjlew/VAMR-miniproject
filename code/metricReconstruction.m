@@ -39,7 +39,7 @@ function [scaledState,scaledCamLocations,scalingFactor,stateMR] = metricReconstr
 stateMR = prev_stateMR;
 
 %% Define reference distance of checkerboard corners
-cornerDist = 0.2; % ground truth distance between two neighboring corners in [m]
+cornerDist = 0.03; % ground truth distance between two neighboring corners in [m]
 nCorners = 9;
 nEdges = sqrt(nCorners)-1;
 [x,y] = meshgrid(0:cornerDist:nEdges*cornerDist,0:cornerDist:nEdges*cornerDist);
