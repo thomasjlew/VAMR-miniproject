@@ -7,11 +7,11 @@ close all;
 % General VO Paramters
 %==========================================================================
 
-ds = 0; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
-live_plotting = true;
+ds = 3; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
+live_plotting = false;
 total_frames = 330;
 KeyframeDist = 1;
-b_save_GIF = true;                     % save results into a GIF
+b_save_GIF = false;                     % save results into a GIF
 % filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
 filename_GIF_traj = 'traj_gif_BA_330_BAparams_new';
 latest_adj_3d_pts = [];
@@ -180,7 +180,7 @@ end
 % Continuous operation
 %===========================================================================
 
-range = (bootstrap_frames(2)+1):(min(bootstrap_frames(2)+n_frames,last_frame));
+range = (bootstrap_frames(2)+1):(min(total_frames,last_frame));
 % profile on
 for frameCount = range
     fprintf('\n Processing frame %d\n=====================', frameCount);
@@ -204,7 +204,8 @@ for frameCount = range
     
     %% Process next frame and store new camera pose
     % triangulate new keypoints only on keyframe
-    if mod(frameCount,intervalKeyframeTriangulation)==0 
+%     if mod(frameCount,intervalKeyframeTriangulation)==0 
+    if mod(frameCount,KeyframeDist)==0 
         IsKeyframe=true;
     else
         IsKeyframe=false;

@@ -6,8 +6,12 @@ function [] = plotTrajectory(f_cameraTrajectory,f_trackingP,camOrientations,camL
 
 figure(f_cameraTrajectory);
 title('Trajectory and Triangulated Keypoints');
-    % calculate average distance of landmarks
-    d =  mean(vecnorm(state.X'));
+    % calculate average distance of landmarks (d=mean(vecnorm(state.X'));)
+    d = 0;
+    for vec_i = 1:size(state.X,2)
+        d = d + norm(state.X(vec_i,:));
+    end
+    d = d / size(state.X,2);
     % adjust axes to follow camera
     xlim([camLocations(end,1)-0.9*d,camLocations(end,1)+0.9*d]); zlim([camLocations(end,3)-0.4*d,camLocations(end,3)+1.4*d]);
     % plot updated landmarks
