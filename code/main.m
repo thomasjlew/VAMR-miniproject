@@ -286,11 +286,12 @@ for frameCount = range
     
    
 end
-profile off
+% profile off
 
 %% Plot final results
 if ~live_plotting
-    [f_keypointScores,f_cameraTrajectory,cam,camBA,trajectory,trajectoryBA,landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
+    [f_keypointScores,f_cameraTrajectory,cam,trajectory,trajectoryBA,...
+        landmarksScatter,landmarksHistoryScatter,landmarksScatterBA] = ...
         initializeFigures(location_initial,orientation_inital,[0 0 0]);
     figure(f_cameraTrajectory);
         grid on; hold on; axis equal;
