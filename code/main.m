@@ -7,13 +7,13 @@ close all;
 % General VO Paramters
 %==========================================================================
 
-ds = 3; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
-live_plotting = false;
-total_frames = 330;
+ds = 2; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
+live_plotting = true;
+total_frames = 500;
 KeyframeDist = 1;
-b_save_GIF = false;                     % save results into a GIF
+b_save_GIF = true;                     % save results into a GIF
 % filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
-filename_GIF_traj = 'traj_gif_BA_330_BAparams_new';
+filename_GIF_traj = 'traj_gif_parking_no';
 latest_adj_3d_pts = [];
 
 % Bundle Adjustment (BA) parameters
@@ -21,7 +21,7 @@ latest_adj_3d_pts = [];
 doMetricReconstruction = false; % only implemented for Duckie dataset
 
 % BA parameters
-doBA = true;
+doBA = false;
 BAparams = struct(...
 'nKeyframes', 5, ...        % Nb of Keyframes used for BA
 'intervalKeyframes', 3, ... % Every "intervalKeyframes", select a keyframe 
@@ -306,6 +306,10 @@ if ~live_plotting
         subplot(2,1,2); 
             title('Number of tracked Keypoints');
             plot((range(1)-1):frameCount,smooth(keypointCount),'-'); 
+            
+%     plotTrajectory(f_cameraTrajectory,f_trackingP,camOrientations,camLocations,...
+%         state,image,landmarksScatter,landmarksHistoryScatter,cam,trajectory,b_save_GIF,...
+%         filename_GIF_traj,keypointCount,inlierIdx,frameCount,range)
 end
 
 fprintf('\n Completed. average inlier share: %d \n', mean(scores));
