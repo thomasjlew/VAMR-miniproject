@@ -155,9 +155,11 @@ if b_save_GIF
 %     d_axis_y = max(camLocations(:,2))-min(camLocations(:,2));
     d_axis_z = max(camLocations(:,3))-min(camLocations(:,3));
     z_mid = min(camLocations(:,3)) + d_axis_z/2;
-    axis([x_mid-d_axis_z/2, x_mid+d_axis_z/2 ...
+    % Make sure whole trajectory is in plot
+    d_axis_all = max(1.05*d_axis_z,1.05*d_axis_x);  % 1.05 for margins
+    axis([x_mid-d_axis_all/2, x_mid+d_axis_all/2 ...
           min(camLocations(:,2)), max(camLocations(:,2)), ...
-          z_mid-d_axis_z/2, z_mid+d_axis_z/2]);
+          z_mid-d_axis_all/2, z_mid+d_axis_all/2]);
 %     axis equal; % no need
     view(0,0);
     title('Full trajectory');    

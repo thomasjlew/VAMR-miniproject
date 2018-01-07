@@ -6,10 +6,12 @@
 %   disp('.')
 %   pause(1)
 % end
-
+% addpath('..');
+disp('asdf')
 try
     main_duckie_no;
 end
+disp('asdf')
 try
     main_duckie_metricRec;
 end

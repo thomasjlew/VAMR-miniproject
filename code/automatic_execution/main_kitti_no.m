@@ -13,7 +13,7 @@ total_frames = 500;
 KeyframeDist = 1;
 b_save_GIF = true;                     % save results into a GIF
 % filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
-filename_GIF_traj = 'traj_gif_kitti_no';
+filename_GIF_traj = 'traj_gif_kitti_latest_no';
 latest_adj_3d_pts = [];
 
 % Bundle Adjustment (BA) parameters
@@ -46,7 +46,7 @@ if ds == 0
         0 0 1];
     
     % specify frame count for initialization keyframes
-    bootstrap_frames=[78, 84];
+    bootstrap_frames=[1, 8];
     
     % load VO parameters
     [paramsInitialization,paramsContinuous] = loadKittiParams();

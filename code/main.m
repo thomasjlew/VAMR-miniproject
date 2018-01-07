@@ -7,11 +7,11 @@ close all;
 % General VO Paramters
 %==========================================================================
 
-ds = 2; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
+ds = 0; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
 live_plotting = true;
 total_frames = 500;
 KeyframeDist = 1;
-b_save_GIF = true;                     % save results into a GIF
+b_save_GIF = false;                     % save results into a GIF
 % filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
 filename_GIF_traj = 'traj_gif_parking_no';
 latest_adj_3d_pts = [];

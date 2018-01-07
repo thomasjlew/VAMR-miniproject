@@ -9,7 +9,7 @@ tic
 
 ds = 1; % 0: KITTI, 1: Malaga, 2: parking, 3:DUCKIE
 live_plotting = true;
-total_frames = 500;
+total_frames = 800;
 KeyframeDist = 1;
 b_save_GIF = true;                     % save results into a GIF
 % filename_GIF_traj = 'traj_gif_withBA_IBA3_250';
